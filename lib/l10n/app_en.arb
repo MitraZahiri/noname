@@ -1,0 +1,20 @@
+﻿{
+  "@@locale": "en",
+  "appName": "NoName",
+  "@appName": {
+    "description": "Application name"
+  },
+  "homeTitle": "Your screen has a new inhabitant",
+  "homeSubtitle": "Your mascot appears while you use other applications and brings quick knowledge challenges.",
+  "mascotStatus": "Mascot status",
+  "mascotStopped": "Stopped",
+  "mascotRunning": "Running",
+  "startMascot": "Start mascot",
+  "stopMascot": "Stop mascot",
+  "showMascotNow": "Show now",
+  "language": "Language",
+  "languageSystem": "System default",
+  "languageEnglish": "English",
+  "languageTurkish": "Turkish",
+  "developmentNotice": "The screen overlay connection will be added in the next development step."
+}

@@ -1,0 +1,17 @@
+﻿{
+  "@@locale": "tr",
+  "appName": "NoName",
+  "homeTitle": "Ekranının artık yeni bir sakini var",
+  "homeSubtitle": "Maskotun diğer uygulamaları kullanırken ortaya çıkar ve kısa bilgi soruları getirir.",
+  "mascotStatus": "Maskot durumu",
+  "mascotStopped": "Durduruldu",
+  "mascotRunning": "Çalışıyor",
+  "startMascot": "Maskotu başlat",
+  "stopMascot": "Maskotu durdur",
+  "showMascotNow": "Şimdi göster",
+  "language": "Dil",
+  "languageSystem": "Sistem varsayılanı",
+  "languageEnglish": "İngilizce",
+  "languageTurkish": "Türkçe",
+  "developmentNotice": "Ekran üstü karakter bağlantısı sonraki geliştirme adımında eklenecek."
+}
