@@ -5,44 +5,88 @@ import android.content.Context
 import android.graphics.PixelFormat
 import android.view.Gravity
 import android.view.WindowManager
+import com.meetra.noname.overlay.animation.MascotAnimationController
+import com.meetra.noname.overlay.animation.MascotAnimationState
 import kotlin.math.roundToInt
 
 class OverlayWindowController(
     context: Context
 ) {
-    private val applicationContext = context.applicationContext
+
+    private val applicationContext =
+        context.applicationContext
 
     private val windowManager =
         applicationContext.getSystemService(
             Context.WINDOW_SERVICE
         ) as WindowManager
 
-    private lateinit var mascotView: MascotOverlayView
-    private lateinit var layoutParams: WindowManager.LayoutParams
+    private val mascotView:
+        MascotOverlayView
+
+    private val animationController:
+        MascotAnimationController
+
+    private val layoutParams:
+        WindowManager.LayoutParams
 
     private var isAttached = false
-    private var entranceAnimator: ValueAnimator? = null
+
+    private var windowAnimator:
+        ValueAnimator? = null
 
     init {
-        createMascotView()
-        createLayoutParams()
+        mascotView = MascotOverlayView(
+            context = applicationContext,
+            onDrag = ::moveBy,
+            onTap = ::handleMascotTap
+        )
+
+        animationController =
+            MascotAnimationController(
+                onStateChanged =
+                    mascotView::setAnimationState,
+                onClimbRequested =
+                    ::animateClimb
+            )
+
+        val size = dp(104)
+
+        layoutParams =
+            WindowManager.LayoutParams(
+                size,
+                size,
+                WindowManager.LayoutParams
+                    .TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams
+                    .FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams
+                        .FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams
+                        .FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity =
+                    Gravity.TOP or Gravity.START
+            }
     }
 
     fun show() {
         if (isAttached) {
-            mascotView.playTapAnimation()
+            animationController.react()
             return
         }
 
-        val hiddenX = -dp(68)
-        val targetX = dp(12)
+        val hiddenX = -dp(92)
+        val peekX = -dp(49)
 
         layoutParams.x = hiddenX
+
         layoutParams.y = (
             applicationContext
                 .resources
                 .displayMetrics
-                .heightPixels * 0.30f
+                .heightPixels * 0.28f
             ).roundToInt()
 
         windowManager.addView(
@@ -52,32 +96,24 @@ class OverlayWindowController(
 
         isAttached = true
 
-        entranceAnimator?.cancel()
+        mascotView.setAnimationState(
+            MascotAnimationState.PEEKING
+        )
 
-        entranceAnimator = ValueAnimator.ofInt(
-            hiddenX,
-            targetX
-        ).apply {
-            duration = 750L
+        animateWindowX(
+            fromX = hiddenX,
+            toX = peekX,
+            durationMillis = 600L
+        )
 
-            addUpdateListener { animator ->
-                if (!isAttached) {
-                    return@addUpdateListener
-                }
-
-                layoutParams.x =
-                    animator.animatedValue as Int
-
-                updateLayout()
-            }
-
-            start()
-        }
+        animationController.startEntrance()
     }
 
     fun hide() {
-        entranceAnimator?.cancel()
-        entranceAnimator = null
+        windowAnimator?.cancel()
+        windowAnimator = null
+
+        animationController.hide()
 
         if (!isAttached) {
             return
@@ -92,30 +128,20 @@ class OverlayWindowController(
         isAttached = false
     }
 
-    private fun createMascotView() {
-        mascotView = MascotOverlayView(
-            context = applicationContext,
-            onDrag = ::moveBy,
-            onTap = {
-                mascotView.playTapAnimation()
-            }
+    private fun animateClimb() {
+        if (!isAttached) {
+            return
+        }
+
+        animateWindowX(
+            fromX = layoutParams.x,
+            toX = dp(12),
+            durationMillis = 850L
         )
     }
 
-    private fun createLayoutParams() {
-        val size = dp(92)
-
-        layoutParams = WindowManager.LayoutParams(
-            size,
-            size,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-        }
+    private fun handleMascotTap() {
+        animationController.react()
     }
 
     private fun moveBy(
@@ -125,6 +151,9 @@ class OverlayWindowController(
         if (!isAttached) {
             return
         }
+
+        windowAnimator?.cancel()
+        animationController.showIdle()
 
         val displayMetrics =
             applicationContext
@@ -140,18 +169,50 @@ class OverlayWindowController(
                 layoutParams.height
 
         layoutParams.x =
-            (layoutParams.x + deltaX).coerceIn(
-                -dp(35),
-                maxX
-            )
+            (layoutParams.x + deltaX)
+                .coerceIn(
+                    -dp(38),
+                    maxX
+                )
 
         layoutParams.y =
-            (layoutParams.y + deltaY).coerceIn(
-                0,
-                maxY
-            )
+            (layoutParams.y + deltaY)
+                .coerceIn(
+                    0,
+                    maxY
+                )
 
         updateLayout()
+    }
+
+    private fun animateWindowX(
+        fromX: Int,
+        toX: Int,
+        durationMillis: Long
+    ) {
+        windowAnimator?.cancel()
+
+        windowAnimator =
+            ValueAnimator.ofInt(
+                fromX,
+                toX
+            ).apply {
+                duration = durationMillis
+
+                addUpdateListener { animator ->
+                    if (!isAttached) {
+                        return@addUpdateListener
+                    }
+
+                    layoutParams.x =
+                        animator.animatedValue
+                            as Int
+
+                    updateLayout()
+                }
+
+                start()
+            }
     }
 
     private fun updateLayout() {
