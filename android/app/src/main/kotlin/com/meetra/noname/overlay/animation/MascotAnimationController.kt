@@ -11,9 +11,10 @@ class MascotAnimationController(
     private val onRunRequested: () -> Unit
 ) {
 
-    private val handler = Handler(
-        Looper.getMainLooper()
-    )
+    private val handler =
+        Handler(
+            Looper.getMainLooper()
+        )
 
     private val scheduledActions =
         mutableListOf<Runnable>()
@@ -27,13 +28,15 @@ class MascotAnimationController(
 
         schedule(650L) {
             changeState(
-                MascotAnimationState.LOOKING_LEFT
+                MascotAnimationState
+                    .LOOKING_LEFT
             )
         }
 
         schedule(1250L) {
             changeState(
-                MascotAnimationState.LOOKING_RIGHT
+                MascotAnimationState
+                    .LOOKING_RIGHT
             )
         }
 
@@ -52,18 +55,57 @@ class MascotAnimationController(
         }
 
         schedule(3350L) {
-            changeState(
-                MascotAnimationState.RUNNING
-            )
-
+            startRunning()
             onRunRequested()
         }
+    }
+
+    fun startRunning() {
+        changeState(
+            MascotAnimationState.RUNNING
+        )
+    }
+
+    fun turn() {
+        changeState(
+            MascotAnimationState.TURNING
+        )
     }
 
     fun finishRunning() {
         changeState(
             MascotAnimationState.IDLE
         )
+    }
+
+    fun showQuestion() {
+        cancel()
+
+        changeState(
+            MascotAnimationState.ASKING
+        )
+    }
+
+    fun answer(
+        isCorrect: Boolean
+    ) {
+        cancel()
+
+        changeState(
+            if (isCorrect) {
+                MascotAnimationState
+                    .ANSWER_CORRECT
+            } else {
+                MascotAnimationState
+                    .ANSWER_WRONG
+            }
+        )
+
+        schedule(1100L) {
+            changeState(
+                MascotAnimationState.IDLE
+            )
+        }
     }
 
     fun react() {
@@ -97,9 +139,12 @@ class MascotAnimationController(
     }
 
     fun cancel() {
-        scheduledActions.forEach { action ->
-            handler.removeCallbacks(action)
-        }
+        scheduledActions
+            .forEach { action ->
+                handler.removeCallbacks(
+                    action
+                )
+            }
 
         scheduledActions.clear()
     }
@@ -114,11 +159,20 @@ class MascotAnimationController(
         delayMillis: Long,
         action: () -> Unit
     ) {
-        val runnable = Runnable {
+        lateinit var runnable:
+            Runnable
+
+        runnable = Runnable {
+            scheduledActions.remove(
+                runnable
+            )
+
             action()
         }
 
-        scheduledActions.add(runnable)
+        scheduledActions.add(
+            runnable
+        )
 
         handler.postDelayed(
             runnable,

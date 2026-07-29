@@ -8,6 +8,10 @@ enum class MascotAnimationState {
     CLIMBING,
     STANDING,
     RUNNING,
+    TURNING,
     IDLE,
-    REACTING
+    ASKING,
+    REACTING,
+    ANSWER_CORRECT,
+    ANSWER_WRONG
 }

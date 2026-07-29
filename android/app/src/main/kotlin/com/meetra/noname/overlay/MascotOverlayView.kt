@@ -105,6 +105,67 @@ class MascotOverlayView(
                     .start()
             }
 
+            MascotAnimationState.TURNING -> {
+                animate()
+                    .scaleX(0.25f)
+                    .scaleY(1.08f)
+                    .setDuration(150L)
+                    .start()
+            }
+
+            MascotAnimationState.ASKING -> {
+                animate()
+                    .alpha(1f)
+                    .rotation(0f)
+                    .scaleX(1f)
+                    .scaleY(1f)
+                    .translationY(-8f)
+                    .setDuration(220L)
+                    .start()
+            }
+
+            MascotAnimationState.ANSWER_CORRECT -> {
+                animate()
+                    .translationY(-28f)
+                    .rotation(8f)
+                    .scaleX(1.12f)
+                    .scaleY(1.12f)
+                    .setDuration(220L)
+                    .withEndAction {
+                        animate()
+                            .translationY(0f)
+                            .rotation(0f)
+                            .scaleX(1f)
+                            .scaleY(1f)
+                            .setDuration(260L)
+                            .start()
+                    }
+                    .start()
+            }
+
+            MascotAnimationState.ANSWER_WRONG -> {
+                animate()
+                    .rotation(-11f)
+                    .translationX(-9f)
+                    .setDuration(120L)
+                    .withEndAction {
+                        animate()
+                            .rotation(11f)
+                            .translationX(9f)
+                            .setDuration(120L)
+                            .withEndAction {
+                                animate()
+                                    .rotation(0f)
+                                    .translationX(0f)
+                                    .setDuration(140L)
+                                    .start()
+                            }
+                            .start()
+                    }
+                    .start()
+            }
+            
+
             MascotAnimationState.REACTING -> {
                 playTapAnimation()
             }
@@ -146,8 +207,12 @@ class MascotOverlayView(
             MascotAnimationState.CLIMBING,
             MascotAnimationState.STANDING,
             MascotAnimationState.RUNNING,
+            MascotAnimationState.TURNING,
             MascotAnimationState.IDLE,
-            MascotAnimationState.REACTING -> true
+            MascotAnimationState.ASKING,
+            MascotAnimationState.REACTING,
+            MascotAnimationState.ANSWER_CORRECT,
+            MascotAnimationState.ANSWER_WRONG -> true
 
             else -> false
         }
