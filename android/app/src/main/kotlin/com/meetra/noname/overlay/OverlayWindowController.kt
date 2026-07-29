@@ -7,6 +7,7 @@ import android.view.Gravity
 import android.view.WindowManager
 import com.meetra.noname.overlay.animation.MascotAnimationController
 import com.meetra.noname.overlay.animation.MascotAnimationState
+import com.meetra.noname.overlay.animation.MascotMovementController
 import kotlin.math.roundToInt
 
 class OverlayWindowController(
@@ -27,6 +28,9 @@ class OverlayWindowController(
     private val animationController:
         MascotAnimationController
 
+    private val movementController:
+        MascotMovementController
+
     private val layoutParams:
         WindowManager.LayoutParams
 
@@ -42,20 +46,27 @@ class OverlayWindowController(
             onTap = ::handleMascotTap
         )
 
+        movementController =
+            MascotMovementController(
+                onFrame = ::handleRunFrame,
+                onFinished =
+                    ::handleRunFinished
+            )
+
         animationController =
             MascotAnimationController(
                 onStateChanged =
                     mascotView::setAnimationState,
                 onClimbRequested =
-                    ::animateClimb
+                    ::animateClimb,
+                onRunRequested =
+                    ::startRun
             )
-
-        val size = dp(104)
 
         layoutParams =
             WindowManager.LayoutParams(
-                size,
-                size,
+                dp(136),
+                dp(180),
                 WindowManager.LayoutParams
                     .TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams
@@ -73,12 +84,13 @@ class OverlayWindowController(
 
     fun show() {
         if (isAttached) {
+            movementController.cancel()
             animationController.react()
             return
         }
 
-        val hiddenX = -dp(92)
-        val peekX = -dp(49)
+        val hiddenX = -dp(124)
+        val peekX = -dp(80)
 
         layoutParams.x = hiddenX
 
@@ -86,7 +98,7 @@ class OverlayWindowController(
             applicationContext
                 .resources
                 .displayMetrics
-                .heightPixels * 0.28f
+                .heightPixels * 0.27f
             ).roundToInt()
 
         windowManager.addView(
@@ -113,6 +125,7 @@ class OverlayWindowController(
         windowAnimator?.cancel()
         windowAnimator = null
 
+        movementController.cancel()
         animationController.hide()
 
         if (!isAttached) {
@@ -135,12 +148,65 @@ class OverlayWindowController(
 
         animateWindowX(
             fromX = layoutParams.x,
-            toX = dp(12),
+            toX = dp(8),
             durationMillis = 850L
         )
     }
 
+    private fun startRun() {
+        if (!isAttached) {
+            return
+        }
+
+        windowAnimator?.cancel()
+
+        val screenWidth =
+            applicationContext
+                .resources
+                .displayMetrics
+                .widthPixels
+
+        val endX =
+            screenWidth -
+                layoutParams.width -
+                dp(8)
+
+        if (endX <= layoutParams.x) {
+            animationController.finishRunning()
+            return
+        }
+
+        movementController.run(
+            fromX = layoutParams.x,
+            toX = endX,
+            durationMillis = 4200L
+        )
+    }
+
+    private fun handleRunFrame(
+        x: Int,
+        progress: Float
+    ) {
+        if (!isAttached) {
+            return
+        }
+
+        layoutParams.x = x
+
+        mascotView.setRunProgress(
+            progress = progress,
+            isFacingRight = true
+        )
+
+        updateLayout()
+    }
+
+    private fun handleRunFinished() {
+        animationController.finishRunning()
+    }
+
     private fun handleMascotTap() {
+        movementController.cancel()
         animationController.react()
     }
 
@@ -153,6 +219,7 @@ class OverlayWindowController(
         }
 
         windowAnimator?.cancel()
+        movementController.cancel()
         animationController.showIdle()
 
         val displayMetrics =
@@ -171,7 +238,7 @@ class OverlayWindowController(
         layoutParams.x =
             (layoutParams.x + deltaX)
                 .coerceIn(
-                    -dp(38),
+                    -dp(45),
                     maxX
                 )
 
@@ -205,8 +272,7 @@ class OverlayWindowController(
                     }
 
                     layoutParams.x =
-                        animator.animatedValue
-                            as Int
+                        animator.animatedValue as Int
 
                     updateLayout()
                 }

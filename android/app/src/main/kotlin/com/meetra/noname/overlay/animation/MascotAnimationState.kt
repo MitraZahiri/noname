@@ -6,6 +6,8 @@ enum class MascotAnimationState {
     LOOKING_LEFT,
     LOOKING_RIGHT,
     CLIMBING,
+    STANDING,
+    RUNNING,
     IDLE,
     REACTING
 }

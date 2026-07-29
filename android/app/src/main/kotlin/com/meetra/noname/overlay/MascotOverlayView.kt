@@ -10,6 +10,7 @@ import android.view.View
 import android.view.ViewConfiguration
 import com.meetra.noname.overlay.animation.MascotAnimationState
 import kotlin.math.abs
+import kotlin.math.sin
 
 class MascotOverlayView(
     context: Context,
@@ -31,19 +32,17 @@ class MascotOverlayView(
     private var animationState =
         MascotAnimationState.HIDDEN
 
+    private var runProgress = 0f
+    private var facingRight = true
+
     private var lastRawX = 0f
     private var lastRawY = 0f
-
     private var downRawX = 0f
     private var downRawY = 0f
-
     private var hasMoved = false
 
     init {
-        setBackgroundColor(
-            Color.TRANSPARENT
-        )
-
+        setBackgroundColor(Color.TRANSPARENT)
         isClickable = true
         alpha = 0f
     }
@@ -52,7 +51,6 @@ class MascotOverlayView(
         state: MascotAnimationState
     ) {
         animationState = state
-
         animate().cancel()
 
         when (state) {
@@ -65,13 +63,13 @@ class MascotOverlayView(
                 rotation = -7f
                 scaleX = 0.92f
                 scaleY = 0.92f
-                translationY = 7f
+                translationY = 8f
             }
 
             MascotAnimationState.LOOKING_LEFT -> {
                 animate()
                     .rotation(-11f)
-                    .translationY(2f)
+                    .translationY(3f)
                     .setDuration(220L)
                     .start()
             }
@@ -79,7 +77,7 @@ class MascotOverlayView(
             MascotAnimationState.LOOKING_RIGHT -> {
                 animate()
                     .rotation(9f)
-                    .translationY(5f)
+                    .translationY(6f)
                     .setDuration(220L)
                     .start()
             }
@@ -89,11 +87,13 @@ class MascotOverlayView(
                     .rotation(0f)
                     .scaleX(1f)
                     .scaleY(1f)
-                    .translationY(-5f)
+                    .translationY(-4f)
                     .setDuration(500L)
                     .start()
             }
 
+            MascotAnimationState.STANDING,
+            MascotAnimationState.RUNNING,
             MascotAnimationState.IDLE -> {
                 animate()
                     .alpha(1f)
@@ -101,7 +101,7 @@ class MascotOverlayView(
                     .scaleX(1f)
                     .scaleY(1f)
                     .translationY(0f)
-                    .setDuration(260L)
+                    .setDuration(240L)
                     .start()
             }
 
@@ -113,43 +113,384 @@ class MascotOverlayView(
         invalidate()
     }
 
+    fun setRunProgress(
+        progress: Float,
+        isFacingRight: Boolean
+    ) {
+        runProgress = progress
+        facingRight = isFacingRight
+        invalidate()
+    }
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
+        canvas.save()
+
+        if (!facingRight) {
+            canvas.scale(
+                -1f,
+                1f,
+                width / 2f,
+                height / 2f
+            )
+        }
+
         val centerX = width / 2f
-        val centerY = height / 2f
+        val headRadius = width * 0.26f
+        val headCenterY = height * 0.27f
 
-        val radius =
-            minOf(width, height) * 0.41f
+        val fullBodyVisible = when (
+            animationState
+        ) {
+            MascotAnimationState.CLIMBING,
+            MascotAnimationState.STANDING,
+            MascotAnimationState.RUNNING,
+            MascotAnimationState.IDLE,
+            MascotAnimationState.REACTING -> true
 
-        paint.style = Paint.Style.FILL
+            else -> false
+        }
 
-        drawHandsIfNeeded(
-            canvas = canvas,
-            centerX = centerX,
-            centerY = centerY,
-            radius = radius
-        )
+        if (fullBodyVisible) {
+            drawLegs(
+                canvas,
+                centerX,
+                headCenterY,
+                headRadius
+            )
+
+            drawArms(
+                canvas,
+                centerX,
+                headCenterY,
+                headRadius
+            )
+
+            drawBody(
+                canvas,
+                centerX,
+                headCenterY,
+                headRadius
+            )
+        }
+
+        if (
+            animationState ==
+            MascotAnimationState.CLIMBING
+        ) {
+            drawClimbingHands(
+                canvas,
+                centerX,
+                headCenterY,
+                headRadius
+            )
+        }
 
         drawHead(
-            canvas = canvas,
-            centerX = centerX,
-            centerY = centerY,
-            radius = radius
+            canvas,
+            centerX,
+            headCenterY,
+            headRadius
         )
 
         drawEyes(
-            canvas = canvas,
-            centerX = centerX,
-            centerY = centerY,
-            radius = radius
+            canvas,
+            centerX,
+            headCenterY,
+            headRadius
         )
 
         drawSmile(
-            canvas = canvas,
-            centerX = centerX,
-            centerY = centerY,
-            radius = radius
+            canvas,
+            centerX,
+            headCenterY,
+            headRadius
+        )
+
+        canvas.restore()
+    }
+
+    private fun drawBody(
+        canvas: Canvas,
+        centerX: Float,
+        headCenterY: Float,
+        radius: Float
+    ) {
+        val bodyTop =
+            headCenterY + radius * 0.72f
+
+        val bodyBottom =
+            bodyTop + radius * 1.15f
+
+        paint.style = Paint.Style.FILL
+        paint.color = Color.rgb(
+            105,
+            74,
+            190
+        )
+
+        canvas.drawRoundRect(
+            RectF(
+                centerX - radius * 0.62f,
+                bodyTop,
+                centerX + radius * 0.62f,
+                bodyBottom
+            ),
+            radius * 0.32f,
+            radius * 0.32f,
+            paint
+        )
+
+        paint.color = Color.rgb(
+            255,
+            210,
+            68
+        )
+
+        canvas.drawCircle(
+            centerX,
+            bodyTop + radius * 0.55f,
+            radius * 0.18f,
+            paint
+        )
+
+        paint.color = Color.rgb(
+            78,
+            48,
+            155
+        )
+
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = radius * 0.07f
+
+        canvas.drawLine(
+            centerX,
+            bodyTop + radius * 0.10f,
+            centerX,
+            bodyBottom - radius * 0.12f,
+            paint
+        )
+
+        paint.style = Paint.Style.FILL
+    }
+
+    private fun drawArms(
+        canvas: Canvas,
+        centerX: Float,
+        headCenterY: Float,
+        radius: Float
+    ) {
+        val bodyTop =
+            headCenterY + radius * 0.78f
+
+        val shoulderY =
+            bodyTop + radius * 0.22f
+
+        val runWave = if (
+            animationState ==
+            MascotAnimationState.RUNNING
+        ) {
+            sin(
+                runProgress *
+                    Math.PI *
+                    12.0
+            ).toFloat()
+        } else {
+            0f
+        }
+
+        val armSwing =
+            runWave * radius * 0.28f
+
+        paint.style = Paint.Style.STROKE
+        paint.strokeCap = Paint.Cap.ROUND
+        paint.strokeWidth = radius * 0.25f
+        paint.color = Color.rgb(
+            105,
+            74,
+            190
+        )
+
+        val leftShoulderX =
+            centerX - radius * 0.48f
+
+        val rightShoulderX =
+            centerX + radius * 0.48f
+
+        val leftHandX =
+            centerX - radius * 0.82f +
+                armSwing
+
+        val rightHandX =
+            centerX + radius * 0.82f -
+                armSwing
+
+        val handY =
+            shoulderY + radius * 0.64f
+
+        canvas.drawLine(
+            leftShoulderX,
+            shoulderY,
+            leftHandX,
+            handY,
+            paint
+        )
+
+        canvas.drawLine(
+            rightShoulderX,
+            shoulderY,
+            rightHandX,
+            handY,
+            paint
+        )
+
+        paint.style = Paint.Style.FILL
+        paint.color = Color.rgb(
+            255,
+            199,
+            52
+        )
+
+        canvas.drawCircle(
+            leftHandX,
+            handY,
+            radius * 0.14f,
+            paint
+        )
+
+        canvas.drawCircle(
+            rightHandX,
+            handY,
+            radius * 0.14f,
+            paint
+        )
+    }
+
+    private fun drawLegs(
+        canvas: Canvas,
+        centerX: Float,
+        headCenterY: Float,
+        radius: Float
+    ) {
+        val bodyTop =
+            headCenterY + radius * 0.72f
+
+        val bodyBottom =
+            bodyTop + radius * 1.15f
+
+        val runWave = if (
+            animationState ==
+            MascotAnimationState.RUNNING
+        ) {
+            sin(
+                runProgress *
+                    Math.PI *
+                    12.0
+            ).toFloat()
+        } else {
+            0f
+        }
+
+        val legSwing =
+            runWave * radius * 0.33f
+
+        val hipY =
+            bodyBottom - radius * 0.06f
+
+        val footY =
+            hipY + radius * 0.86f
+
+        val leftHipX =
+            centerX - radius * 0.25f
+
+        val rightHipX =
+            centerX + radius * 0.25f
+
+        val leftFootX =
+            leftHipX + legSwing
+
+        val rightFootX =
+            rightHipX - legSwing
+
+        paint.style = Paint.Style.STROKE
+        paint.strokeCap = Paint.Cap.ROUND
+        paint.strokeWidth = radius * 0.24f
+        paint.color = Color.rgb(
+            65,
+            65,
+            78
+        )
+
+        canvas.drawLine(
+            leftHipX,
+            hipY,
+            leftFootX,
+            footY,
+            paint
+        )
+
+        canvas.drawLine(
+            rightHipX,
+            hipY,
+            rightFootX,
+            footY,
+            paint
+        )
+
+        paint.style = Paint.Style.FILL
+        paint.color = Color.rgb(
+            99,
+            69,
+            196
+        )
+
+        canvas.drawOval(
+            RectF(
+                leftFootX - radius * 0.24f,
+                footY - radius * 0.08f,
+                leftFootX + radius * 0.30f,
+                footY + radius * 0.20f
+            ),
+            paint
+        )
+
+        canvas.drawOval(
+            RectF(
+                rightFootX - radius * 0.24f,
+                footY - radius * 0.08f,
+                rightFootX + radius * 0.30f,
+                footY + radius * 0.20f
+            ),
+            paint
+        )
+    }
+
+    private fun drawClimbingHands(
+        canvas: Canvas,
+        centerX: Float,
+        centerY: Float,
+        radius: Float
+    ) {
+        paint.style = Paint.Style.FILL
+        paint.color = Color.rgb(
+            255,
+            199,
+            52
+        )
+
+        canvas.drawCircle(
+            centerX - radius * 0.78f,
+            centerY + radius * 0.58f,
+            radius * 0.17f,
+            paint
+        )
+
+        canvas.drawCircle(
+            centerX + radius * 0.78f,
+            centerY + radius * 0.58f,
+            radius * 0.17f,
+            paint
         )
     }
 
@@ -197,22 +538,25 @@ class MascotOverlayView(
         paint.style = Paint.Style.FILL
         paint.color = Color.WHITE
 
-        val leftEye = RectF(
-            centerX - radius * 0.57f,
-            centerY - radius * 0.30f,
-            centerX - radius * 0.04f,
-            centerY + radius * 0.22f
+        canvas.drawOval(
+            RectF(
+                centerX - radius * 0.57f,
+                centerY - radius * 0.30f,
+                centerX - radius * 0.04f,
+                centerY + radius * 0.22f
+            ),
+            paint
         )
 
-        val rightEye = RectF(
-            centerX + radius * 0.04f,
-            centerY - radius * 0.30f,
-            centerX + radius * 0.57f,
-            centerY + radius * 0.22f
+        canvas.drawOval(
+            RectF(
+                centerX + radius * 0.04f,
+                centerY - radius * 0.30f,
+                centerX + radius * 0.57f,
+                centerY + radius * 0.22f
+            ),
+            paint
         )
-
-        canvas.drawOval(leftEye, paint)
-        canvas.drawOval(rightEye, paint)
 
         val pupilOffset = when (
             animationState
@@ -283,41 +627,6 @@ class MascotOverlayView(
         paint.style = Paint.Style.FILL
     }
 
-    private fun drawHandsIfNeeded(
-        canvas: Canvas,
-        centerX: Float,
-        centerY: Float,
-        radius: Float
-    ) {
-        if (
-            animationState !=
-            MascotAnimationState.CLIMBING
-        ) {
-            return
-        }
-
-        paint.style = Paint.Style.FILL
-        paint.color = Color.rgb(
-            255,
-            199,
-            52
-        )
-
-        canvas.drawCircle(
-            centerX - radius * 0.77f,
-            centerY + radius * 0.38f,
-            radius * 0.17f,
-            paint
-        )
-
-        canvas.drawCircle(
-            centerX + radius * 0.77f,
-            centerY + radius * 0.38f,
-            radius * 0.17f,
-            paint
-        )
-    }
-
     override fun onTouchEvent(
         event: MotionEvent
     ): Boolean {
@@ -325,12 +634,9 @@ class MascotOverlayView(
             MotionEvent.ACTION_DOWN -> {
                 downRawX = event.rawX
                 downRawY = event.rawY
-
                 lastRawX = event.rawX
                 lastRawY = event.rawY
-
                 hasMoved = false
-
                 return true
             }
 
@@ -380,9 +686,7 @@ class MascotOverlayView(
 
     override fun performClick(): Boolean {
         super.performClick()
-
         onTap()
-
         return true
     }
 
@@ -390,7 +694,7 @@ class MascotOverlayView(
         animate().cancel()
 
         animate()
-            .scaleX(1.20f)
+            .scaleX(1.18f)
             .scaleY(0.84f)
             .rotation(-5f)
             .setDuration(130L)

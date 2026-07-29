@@ -7,7 +7,8 @@ class MascotAnimationController(
     private val onStateChanged: (
         MascotAnimationState
     ) -> Unit,
-    private val onClimbRequested: () -> Unit
+    private val onClimbRequested: () -> Unit,
+    private val onRunRequested: () -> Unit
 ) {
 
     private val handler = Handler(
@@ -24,25 +25,19 @@ class MascotAnimationController(
             MascotAnimationState.PEEKING
         )
 
-        schedule(
-            delayMillis = 650L
-        ) {
+        schedule(650L) {
             changeState(
                 MascotAnimationState.LOOKING_LEFT
             )
         }
 
-        schedule(
-            delayMillis = 1250L
-        ) {
+        schedule(1250L) {
             changeState(
                 MascotAnimationState.LOOKING_RIGHT
             )
         }
 
-        schedule(
-            delayMillis = 1850L
-        ) {
+        schedule(1850L) {
             changeState(
                 MascotAnimationState.CLIMBING
             )
@@ -50,13 +45,25 @@ class MascotAnimationController(
             onClimbRequested()
         }
 
-        schedule(
-            delayMillis = 2850L
-        ) {
+        schedule(2850L) {
             changeState(
-                MascotAnimationState.IDLE
+                MascotAnimationState.STANDING
             )
         }
+
+        schedule(3350L) {
+            changeState(
+                MascotAnimationState.RUNNING
+            )
+
+            onRunRequested()
+        }
+    }
+
+    fun finishRunning() {
+        changeState(
+            MascotAnimationState.IDLE
+        )
     }
 
     fun react() {
@@ -66,9 +73,7 @@ class MascotAnimationController(
             MascotAnimationState.REACTING
         )
 
-        schedule(
-            delayMillis = 500L
-        ) {
+        schedule(500L) {
             changeState(
                 MascotAnimationState.IDLE
             )
