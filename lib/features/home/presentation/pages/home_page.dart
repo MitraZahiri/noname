@@ -2,16 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:noname/core/localization/locale_controller.dart';
 import 'package:noname/features/mascot/application/mascot_controller.dart';
 import 'package:noname/l10n/generated/app_localizations.dart';
+import 'package:noname/features/quiz/application/quiz_controller.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({
     required this.localeController,
     required this.mascotController,
+    required this.quizController,
     super.key,
   });
 
   final LocaleController localeController;
   final MascotController mascotController;
+  final QuizController quizController;
 
   @override
   State<HomePage> createState() => _HomePageState();
