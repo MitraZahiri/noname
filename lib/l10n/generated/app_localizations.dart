@@ -178,6 +178,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The screen overlay connection will be added in the next development step.'**
   String get developmentNotice;
+
+  /// No description provided for @overlayPermissionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Display over other apps'**
+  String get overlayPermissionTitle;
+
+  /// No description provided for @overlayPermissionGranted.
+  ///
+  /// In en, this message translates to:
+  /// **'Permission granted'**
+  String get overlayPermissionGranted;
+
+  /// No description provided for @overlayPermissionRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Permission required'**
+  String get overlayPermissionRequired;
+
+  /// No description provided for @overlayPermissionDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow NoName to appear over other applications.'**
+  String get overlayPermissionDescription;
+
+  /// No description provided for @grantOverlayPermission.
+  ///
+  /// In en, this message translates to:
+  /// **'Grant overlay permission'**
+  String get grantOverlayPermission;
+
+  /// No description provided for @permissionError.
+  ///
+  /// In en, this message translates to:
+  /// **'The permission operation could not be completed.'**
+  String get permissionError;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

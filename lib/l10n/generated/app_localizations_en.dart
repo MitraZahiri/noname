@@ -49,4 +49,22 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get developmentNotice => 'The screen overlay connection will be added in the next development step.';
+
+  @override
+  String get overlayPermissionTitle => 'Display over other apps';
+
+  @override
+  String get overlayPermissionGranted => 'Permission granted';
+
+  @override
+  String get overlayPermissionRequired => 'Permission required';
+
+  @override
+  String get overlayPermissionDescription => 'Allow NoName to appear over other applications.';
+
+  @override
+  String get grantOverlayPermission => 'Grant overlay permission';
+
+  @override
+  String get permissionError => 'The permission operation could not be completed.';
 }

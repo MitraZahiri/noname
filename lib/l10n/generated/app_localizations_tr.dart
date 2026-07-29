@@ -49,4 +49,22 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get developmentNotice => 'Ekran üstü karakter bağlantısı sonraki geliştirme adımında eklenecek.';
+
+  @override
+  String get overlayPermissionTitle => 'Diğer uygulamaların üzerinde göster';
+
+  @override
+  String get overlayPermissionGranted => 'İzin verildi';
+
+  @override
+  String get overlayPermissionRequired => 'İzin gerekli';
+
+  @override
+  String get overlayPermissionDescription => 'NoName\'in diğer uygulamaların üzerinde görünmesine izin ver.';
+
+  @override
+  String get grantOverlayPermission => 'Ekran üstü izni ver';
+
+  @override
+  String get permissionError => 'İzin işlemi tamamlanamadı.';
 }

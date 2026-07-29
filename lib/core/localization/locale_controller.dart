@@ -1,10 +1,6 @@
 import 'package:flutter/material.dart';
 
-enum AppLocalePreference {
-  system,
-  english,
-  turkish,
-}
+enum AppLocalePreference { system, english, turkish }
 
 class LocaleController extends ChangeNotifier {
   AppLocalePreference _preference = AppLocalePreference.system;
