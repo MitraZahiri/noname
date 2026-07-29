@@ -25,14 +25,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      widget.mascotController.refreshPermission();
+      widget.mascotController.refreshState();
     });
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      widget.mascotController.refreshPermission();
+      widget.mascotController.refreshState();
     }
   }
 
@@ -89,22 +89,30 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   onPressed:
                       controller.isBusy
                           ? null
-                          : permissionGranted
+                          : !permissionGranted
                           ? () {
-                            _showDevelopmentMessage(context);
-                          }
-                          : () {
                             _requestOverlayPermission(context);
+                          }
+                          : controller.isRunning
+                          ? () async {
+                            await controller.stopMascot();
+                          }
+                          : () async {
+                            await controller.startMascot();
                           },
                   icon: Icon(
-                    permissionGranted
-                        ? Icons.play_arrow_rounded
-                        : Icons.security_rounded,
+                    !permissionGranted
+                        ? Icons.security_rounded
+                        : controller.isRunning
+                        ? Icons.stop_rounded
+                        : Icons.play_arrow_rounded,
                   ),
                   label: Text(
-                    permissionGranted
-                        ? localizations.startMascot
-                        : localizations.grantOverlayPermission,
+                    !permissionGranted
+                        ? localizations.grantOverlayPermission
+                        : controller.isRunning
+                        ? localizations.stopMascot
+                        : localizations.startMascot,
                   ),
                 ),
 
@@ -112,9 +120,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
                 OutlinedButton.icon(
                   onPressed:
-                      permissionGranted && !controller.isBusy
-                          ? () {
-                            _showDevelopmentMessage(context);
+                      permissionGranted &&
+                              controller.isRunning &&
+                              !controller.isBusy
+                          ? () async {
+                            await controller.showMascotNow();
                           }
                           : null,
                   icon: const Icon(Icons.visibility_rounded),
@@ -187,14 +197,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text(localizations.permissionError)));
     }
-  }
-
-  void _showDevelopmentMessage(BuildContext context) {
-    final localizations = AppLocalizations.of(context)!;
-
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(localizations.developmentNotice)));
   }
 }
 

@@ -23,4 +23,36 @@ class MascotOverlayPlatformService {
 
     await _channel.invokeMethod<void>('requestOverlayPermission');
   }
+
+  Future<bool> startMascot() async {
+    if (!isSupported) {
+      return false;
+    }
+
+    return await _channel.invokeMethod<bool>('startMascotOverlay') ?? false;
+  }
+
+  Future<bool> stopMascot() async {
+    if (!isSupported) {
+      return false;
+    }
+
+    return await _channel.invokeMethod<bool>('stopMascotOverlay') ?? false;
+  }
+
+  Future<bool> showMascot() async {
+    if (!isSupported) {
+      return false;
+    }
+
+    return await _channel.invokeMethod<bool>('showMascotOverlay') ?? false;
+  }
+
+  Future<bool> isMascotRunning() async {
+    if (!isSupported) {
+      return false;
+    }
+
+    return await _channel.invokeMethod<bool>('isMascotOverlayRunning') ?? false;
+  }
 }
