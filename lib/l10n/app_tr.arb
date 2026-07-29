@@ -13,5 +13,12 @@
   "languageSystem": "Sistem varsayılanı",
   "languageEnglish": "İngilizce",
   "languageTurkish": "Türkçe",
-  "developmentNotice": "Ekran üstü karakter bağlantısı sonraki geliştirme adımında eklenecek."
+  "developmentNotice": "Ekran üstü karakter bağlantısı sonraki geliştirme adımında eklenecek.",
+  "developmentNotice": "Ekran üstü karakter bağlantısı sonraki geliştirme adımında eklenecek.",
+  "overlayPermissionTitle": "Diğer uygulamaların üzerinde göster",
+  "overlayPermissionGranted": "İzin verildi",
+  "overlayPermissionRequired": "İzin gerekli",
+  "overlayPermissionDescription": "NoName'in diğer uygulamaların üzerinde görünmesine izin ver.",
+  "grantOverlayPermission": "Ekran üstü izni ver",
+  "permissionError": "İzin işlemi tamamlanamadı."
 }

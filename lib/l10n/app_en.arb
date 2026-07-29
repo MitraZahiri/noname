@@ -16,5 +16,12 @@
   "languageSystem": "System default",
   "languageEnglish": "English",
   "languageTurkish": "Turkish",
-  "developmentNotice": "The screen overlay connection will be added in the next development step."
+  "developmentNotice": "The screen overlay connection will be added in the next development step.",
+
+  "overlayPermissionTitle": "Display over other apps",
+  "overlayPermissionGranted": "Permission granted",
+  "overlayPermissionRequired": "Permission required",
+  "overlayPermissionDescription": "Allow NoName to appear over other applications.",
+  "grantOverlayPermission": "Grant overlay permission",
+  "permissionError": "The permission operation could not be completed."
 }
