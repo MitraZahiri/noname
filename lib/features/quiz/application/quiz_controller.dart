@@ -4,25 +4,51 @@ import '../domain/entities/quiz_category.dart';
 import '../domain/entities/quiz_difficulty.dart';
 import '../domain/entities/quiz_progress.dart';
 import '../domain/entities/quiz_question.dart';
+import '../domain/repositories/quiz_progress_repository.dart';
 import '../domain/repositories/quiz_repository.dart';
 
 class QuizController extends ChangeNotifier {
-  QuizController({required QuizRepository repository})
-    : _repository = repository;
+  QuizController({
+    required QuizRepository repository,
+    required QuizProgressRepository progressRepository,
+  }) : _repository = repository,
+       _progressRepository = progressRepository;
 
   final QuizRepository _repository;
 
+  final QuizProgressRepository _progressRepository;
+
   QuizQuestion? _activeQuestion;
+
   QuizCategory? _preferredCategory;
+
   QuizDifficulty _difficulty = QuizDifficulty.easy;
+
   QuizProgress _progress = const QuizProgress.empty();
 
   String? _answeredQuestionId;
 
+  bool _isInitialized = false;
+
   QuizQuestion? get activeQuestion => _activeQuestion;
+
   QuizCategory? get preferredCategory => _preferredCategory;
+
   QuizDifficulty get difficulty => _difficulty;
+
   QuizProgress get progress => _progress;
+
+  Future<void> initialize() async {
+    if (_isInitialized) {
+      return;
+    }
+
+    _progress = await _progressRepository.load();
+
+    _isInitialized = true;
+
+    notifyListeners();
+  }
 
   QuizQuestion prepareNextQuestion({required String localeCode}) {
     final question = _repository.getNextQuestion(
@@ -57,7 +83,7 @@ class QuizController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void recordAnswer({required int selectedIndex}) {
+  Future<void> recordAnswer({required int selectedIndex}) async {
     final question = _activeQuestion;
 
     if (question == null) {
@@ -85,12 +111,31 @@ class QuizController extends ChangeNotifier {
     _progress = _progress.recordAnswer(isCorrect: isCorrect);
 
     notifyListeners();
+
+    try {
+      await _progressRepository.save(_progress);
+    } catch (error, stackTrace) {
+      debugPrint(
+        'Quiz progress could not be saved: '
+        '$error\n$stackTrace',
+      );
+    }
   }
 
-  void resetProgress() {
+  Future<void> resetProgress() async {
     _progress = const QuizProgress.empty();
+
     _answeredQuestionId = null;
 
     notifyListeners();
+
+    try {
+      await _progressRepository.clear();
+    } catch (error, stackTrace) {
+      debugPrint(
+        'Quiz progress could not be cleared: '
+        '$error\n$stackTrace',
+      );
+    }
   }
 }

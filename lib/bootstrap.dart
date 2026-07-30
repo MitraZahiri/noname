@@ -7,13 +7,19 @@ import 'features/mascot/application/mascot_quiz_coordinator.dart';
 import 'features/mascot/data/services/mascot_overlay_platform_service.dart';
 import 'features/quiz/application/quiz_controller.dart';
 import 'features/quiz/data/repositories/local_quiz_repository.dart';
+import 'features/quiz/data/repositories/shared_preferences_quiz_progress_repository.dart';
 
-void bootstrap() {
+Future<void> bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final localeController = LocaleController();
 
-  final quizController = QuizController(repository: LocalQuizRepository());
+  final quizController = QuizController(
+    repository: LocalQuizRepository(),
+    progressRepository: SharedPreferencesQuizProgressRepository(),
+  );
+
+  await quizController.initialize();
 
   final platformService = MascotOverlayPlatformService();
 

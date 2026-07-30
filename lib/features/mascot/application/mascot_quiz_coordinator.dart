@@ -69,7 +69,7 @@ class MascotQuizCoordinator {
       return;
     }
 
-    _quizController.recordAnswer(selectedIndex: answer.selectedIndex);
+    await _quizController.recordAnswer(selectedIndex: answer.selectedIndex);
 
     // Yeni soru burada gönderilmiyor.
     // Kullanıcı "Evet" derse gönderilecek.
