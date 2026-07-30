@@ -1,4 +1,4 @@
-package com.meetra.noname.overlay
+﻿package com.meetra.noname.overlay
 
 import android.app.Service
 import android.content.Intent
@@ -6,6 +6,8 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
+import com.meetra.noname.channel.OverlayFlutterBridge
+import com.meetra.noname.overlay.quiz.QuizQuestion
 
 class MascotOverlayService : Service() {
 
@@ -22,6 +24,24 @@ class MascotOverlayService : Service() {
         @Volatile
         var isRunning: Boolean = false
             private set
+
+        @Volatile
+        private var activeInstance:
+            MascotOverlayService? = null
+
+        @Volatile
+        private var pendingQuestion:
+            QuizQuestion? = null
+
+        fun updateQuizQuestion(
+            question: QuizQuestion
+        ) {
+            pendingQuestion = question
+
+            activeInstance
+                ?.windowController
+                ?.setQuestion(question)
+        }
     }
 
     private lateinit var windowController:
@@ -30,32 +50,47 @@ class MascotOverlayService : Service() {
     override fun onCreate() {
         super.onCreate()
 
-        OverlayNotificationFactory.createChannel(this)
+        OverlayNotificationFactory
+            .createChannel(this)
 
         val notification =
-            OverlayNotificationFactory.createNotification(
-                this
-            )
+            OverlayNotificationFactory
+                .createNotification(this)
 
         if (
             Build.VERSION.SDK_INT >=
             Build.VERSION_CODES.UPSIDE_DOWN_CAKE
         ) {
             startForeground(
-                OverlayNotificationFactory.NOTIFICATION_ID,
+                OverlayNotificationFactory
+                    .NOTIFICATION_ID,
                 notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                ServiceInfo
+                    .FOREGROUND_SERVICE_TYPE_SPECIAL_USE
             )
         } else {
             startForeground(
-                OverlayNotificationFactory.NOTIFICATION_ID,
+                OverlayNotificationFactory
+                    .NOTIFICATION_ID,
                 notification
             )
         }
 
         windowController =
-            OverlayWindowController(this)
+            OverlayWindowController(
+                context = this,
+                onQuizAnswered =
+                    OverlayFlutterBridge
+                        ::sendQuizAnswered
+            )
 
+        pendingQuestion?.let { question ->
+            windowController.setQuestion(
+                question
+            )
+        }
+
+        activeInstance = this
         isRunning = true
     }
 
@@ -72,7 +107,9 @@ class MascotOverlayService : Service() {
             ACTION_START,
             ACTION_SHOW,
             null -> {
-                if (Settings.canDrawOverlays(this)) {
+                if (
+                    Settings.canDrawOverlays(this)
+                ) {
                     windowController.show()
                 } else {
                     stopSelf()
@@ -84,15 +121,23 @@ class MascotOverlayService : Service() {
     }
 
     override fun onDestroy() {
+        if (activeInstance === this) {
+            activeInstance = null
+        }
+
         windowController.hide()
         isRunning = false
 
-        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopForeground(
+            STOP_FOREGROUND_REMOVE
+        )
 
         super.onDestroy()
     }
 
-    override fun onBind(intent: Intent?): IBinder? {
+    override fun onBind(
+        intent: Intent?
+    ): IBinder? {
         return null
     }
 }

@@ -5,6 +5,7 @@ import '../core/localization/locale_controller.dart';
 import '../core/theme/app_theme.dart';
 import '../features/home/presentation/pages/home_page.dart';
 import '../features/mascot/application/mascot_controller.dart';
+import '../features/mascot/application/mascot_quiz_coordinator.dart';
 import '../features/quiz/application/quiz_controller.dart';
 
 class NonameApp extends StatelessWidget {
@@ -12,12 +13,14 @@ class NonameApp extends StatelessWidget {
     required this.localeController,
     required this.mascotController,
     required this.quizController,
+    required this.mascotQuizCoordinator,
     super.key,
   });
 
   final LocaleController localeController;
   final MascotController mascotController;
   final QuizController quizController;
+  final MascotQuizCoordinator mascotQuizCoordinator;
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +42,7 @@ class NonameApp extends StatelessWidget {
             localeController: localeController,
             mascotController: mascotController,
             quizController: quizController,
+            mascotQuizCoordinator: mascotQuizCoordinator,
           ),
         );
       },

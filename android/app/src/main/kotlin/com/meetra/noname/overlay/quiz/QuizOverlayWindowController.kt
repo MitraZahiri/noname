@@ -9,6 +9,8 @@ import kotlin.math.roundToInt
 class QuizOverlayWindowController(
     context: Context,
     private val onAnswered: (
+        questionId: String,
+        selectedIndex: Int,
         isCorrect: Boolean
     ) -> Unit
 ) {
@@ -21,21 +23,17 @@ class QuizOverlayWindowController(
             Context.WINDOW_SERVICE
         ) as WindowManager
 
-    private val bubbleWidth = dp(300)
-    private val bubbleHeight = dp(270)
+    private val bubbleWidth = dp(310)
+    private val bubbleHeight = dp(360)
+
+    private var currentQuestion:
+        QuizQuestion? = null
 
     private val questionView =
         QuestionOverlayView(
             context = applicationContext,
-            onAnswerSelected = {
-                isCorrect ->
-
-                hide()
-
-                onAnswered(
-                    isCorrect
-                )
-            }
+            onAnswerSelected =
+                ::handleAnswerSelected
         )
 
     private val layoutParams =
@@ -64,6 +62,9 @@ class QuizOverlayWindowController(
         anchorTopY: Int,
         anchorHeight: Int
     ) {
+        currentQuestion = question
+
+        questionView.animate().cancel()
         questionView.bind(question)
 
         val displayMetrics =
@@ -82,7 +83,7 @@ class QuizOverlayWindowController(
                     bubbleWidth / 2
                 ).coerceIn(
                     dp(8),
-                    maximumX
+                    maximumX.coerceAtLeast(dp(8))
                 )
 
         val preferredTopY =
@@ -91,9 +92,7 @@ class QuizOverlayWindowController(
                 dp(8)
 
         layoutParams.y =
-            if (
-                preferredTopY >= dp(8)
-            ) {
+            if (preferredTopY >= dp(8)) {
                 preferredTopY
             } else {
                 (
@@ -122,14 +121,14 @@ class QuizOverlayWindowController(
         }
 
         questionView.alpha = 0f
-        questionView.scaleX = 0.78f
-        questionView.scaleY = 0.78f
+        questionView.scaleX = 0.82f
+        questionView.scaleY = 0.82f
 
         questionView.animate()
             .alpha(1f)
             .scaleX(1f)
             .scaleY(1f)
-            .setDuration(260L)
+            .setDuration(240L)
             .start()
     }
 
@@ -138,11 +137,13 @@ class QuizOverlayWindowController(
             return
         }
 
+        questionView.animate().cancel()
+
         questionView.animate()
             .alpha(0f)
-            .scaleX(0.85f)
-            .scaleY(0.85f)
-            .setDuration(160L)
+            .scaleX(0.88f)
+            .scaleY(0.88f)
+            .setDuration(150L)
             .withEndAction {
                 if (!isAttached) {
                     return@withEndAction
@@ -158,6 +159,22 @@ class QuizOverlayWindowController(
                 isAttached = false
             }
             .start()
+    }
+
+    private fun handleAnswerSelected(
+        selectedIndex: Int,
+        isCorrect: Boolean
+    ) {
+        val answeredQuestion =
+            currentQuestion ?: return
+
+        hide()
+
+        onAnswered(
+            answeredQuestion.id,
+            selectedIndex,
+            isCorrect
+        )
     }
 
     private fun dp(

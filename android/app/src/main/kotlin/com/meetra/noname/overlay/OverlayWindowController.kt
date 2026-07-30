@@ -8,12 +8,17 @@ import android.view.WindowManager
 import com.meetra.noname.overlay.animation.MascotAnimationController
 import com.meetra.noname.overlay.animation.MascotAnimationState
 import com.meetra.noname.overlay.animation.MascotMovementController
-import com.meetra.noname.overlay.quiz.DemoQuizRepository
 import com.meetra.noname.overlay.quiz.QuizOverlayWindowController
+import com.meetra.noname.overlay.quiz.QuizQuestion
 import kotlin.math.roundToInt
 
 class OverlayWindowController(
-    context: Context
+    context: Context,
+    private val onQuizAnswered: (
+        questionId: String,
+        selectedIndex: Int,
+        isCorrect: Boolean
+    ) -> Unit
 ) {
 
     private val applicationContext =
@@ -33,14 +38,16 @@ class OverlayWindowController(
     private val movementController:
         MascotMovementController
 
-    private val quizRepository =
-        DemoQuizRepository()
-
     private val quizWindowController:
         QuizOverlayWindowController
 
     private val layoutParams:
         WindowManager.LayoutParams
+
+    private var activeQuestion:
+        QuizQuestion? = null
+
+    private var questionVersion = 0
 
     private var isAttached = false
 
@@ -97,11 +104,19 @@ class OverlayWindowController(
             }
     }
 
+    fun setQuestion(
+        question: QuizQuestion
+    ) {
+        activeQuestion = question
+        questionVersion += 1
+    }
+
     fun show() {
         if (isAttached) {
-            quizWindowController.hide()
+            windowAnimator?.cancel()
             movementController.cancel()
-            animationController.react()
+            quizWindowController.hide()
+            showQuestion()
             return
         }
 
@@ -114,7 +129,7 @@ class OverlayWindowController(
             applicationContext
                 .resources
                 .displayMetrics
-                .heightPixels * 0.42f
+                .heightPixels * 0.52f
             ).roundToInt()
 
         windowManager.addView(
@@ -140,8 +155,7 @@ class OverlayWindowController(
             durationMillis = 600L
         )
 
-        animationController
-            .startEntrance()
+        animationController.startEntrance()
     }
 
     fun hide() {
@@ -157,10 +171,9 @@ class OverlayWindowController(
         }
 
         runCatching {
-            windowManager
-                .removeViewImmediate(
-                    mascotView
-                )
+            windowManager.removeViewImmediate(
+                mascotView
+            )
         }
 
         isAttached = false
@@ -196,16 +209,16 @@ class OverlayWindowController(
             isFacingRight = true
         )
 
-        animationController
-            .startRunning()
+        animationController.startRunning()
 
-        val displayMetrics =
+        val screenWidth =
             applicationContext
                 .resources
                 .displayMetrics
+                .widthPixels
 
         val destinationX =
-            displayMetrics.widthPixels -
+            screenWidth -
                 layoutParams.width -
                 dp(8)
 
@@ -238,17 +251,17 @@ class OverlayWindowController(
                     isFacingRight = false
                 )
 
-                animationController
-                    .startRunning()
+                animationController.startRunning()
 
-                val displayMetrics =
+                val screenWidth =
                     applicationContext
                         .resources
                         .displayMetrics
+                        .widthPixels
 
                 val centerX =
                     (
-                        displayMetrics.widthPixels -
+                        screenWidth -
                             layoutParams.width
                         ) / 2
 
@@ -269,27 +282,30 @@ class OverlayWindowController(
             return
         }
 
-        animationController
-            .finishRunning()
+        animationController.finishRunning()
 
         mascotView.postDelayed(
             {
-                if (!isAttached) {
-                    return@postDelayed
+                if (isAttached) {
+                    showQuestion()
                 }
-
-                showQuestion()
             },
-            500L
+            450L
         )
     }
 
     private fun showQuestion() {
-        animationController
-            .showQuestion()
+        if (!isAttached) {
+            return
+        }
 
         val question =
-            quizRepository.nextQuestion()
+            activeQuestion ?: run {
+                animationController.showIdle()
+                return
+            }
+
+        animationController.showQuestion()
 
         quizWindowController.show(
             question = question,
@@ -304,10 +320,39 @@ class OverlayWindowController(
     }
 
     private fun handleQuizAnswer(
+        questionId: String,
+        selectedIndex: Int,
         isCorrect: Boolean
     ) {
+        val answeredVersion =
+            questionVersion
+
         animationController.answer(
             isCorrect
+        )
+
+        onQuizAnswered(
+            questionId,
+            selectedIndex,
+            isCorrect
+        )
+
+        mascotView.postDelayed(
+            {
+                if (!isAttached) {
+                    return@postDelayed
+                }
+
+                if (
+                    questionVersion >
+                    answeredVersion
+                ) {
+                    showQuestion()
+                } else {
+                    animationController.showIdle()
+                }
+            },
+            1300L
         )
     }
 
@@ -330,9 +375,10 @@ class OverlayWindowController(
     }
 
     private fun handleMascotTap() {
-        quizWindowController.hide()
+        windowAnimator?.cancel()
         movementController.cancel()
-        animationController.react()
+        quizWindowController.hide()
+        showQuestion()
     }
 
     private fun moveBy(

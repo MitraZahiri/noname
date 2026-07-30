@@ -4,11 +4,13 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
+import android.util.TypedValue
 import android.view.MotionEvent
 import android.view.View
 import kotlin.math.max
@@ -16,6 +18,7 @@ import kotlin.math.max
 class QuestionOverlayView(
     context: Context,
     private val onAnswerSelected: (
+        selectedIndex: Int,
         isCorrect: Boolean
     ) -> Unit
 ) : View(context) {
@@ -23,16 +26,9 @@ class QuestionOverlayView(
     private val density =
         resources.displayMetrics.density
 
-    private val scaledDensity =
-        resources.displayMetrics.scaledDensity
-
     private val backgroundPaint =
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.rgb(
-                255,
-                255,
-                255
-            )
+            color = Color.WHITE
 
             setShadowLayer(
                 dp(12).toFloat(),
@@ -50,7 +46,7 @@ class QuestionOverlayView(
     private val optionPaint =
         Paint(Paint.ANTI_ALIAS_FLAG)
 
-    private val optionTextPaint =
+    private val letterPaint =
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(
                 55,
@@ -60,6 +56,7 @@ class QuestionOverlayView(
 
             textSize = sp(15)
             typeface = Typeface.DEFAULT_BOLD
+            textAlign = Paint.Align.CENTER
         }
 
     private val questionTextPaint =
@@ -74,13 +71,48 @@ class QuestionOverlayView(
             typeface = Typeface.DEFAULT_BOLD
         }
 
+    private val optionTextPaint =
+        TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(
+                55,
+                46,
+                72
+            )
+
+            textSize = sp(14)
+            typeface = Typeface.DEFAULT_BOLD
+        }
+
+    private val feedbackTextPaint =
+        TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = sp(16)
+            typeface = Typeface.DEFAULT_BOLD
+        }
+
+    private val explanationTextPaint =
+        TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(
+                75,
+                68,
+                85
+            )
+
+            textSize = sp(13)
+        }
+
     private var question:
         QuizQuestion? = null
 
     private var selectedIndex:
         Int? = null
 
+    private var answerWasCorrect:
+        Boolean? = null
+
     private var answerLocked = false
+
+    private var pendingAnswerAction:
+        Runnable? = null
 
     private val optionRects =
         mutableListOf<RectF>()
@@ -101,10 +133,17 @@ class QuestionOverlayView(
     fun bind(
         newQuestion: QuizQuestion
     ) {
+        pendingAnswerAction?.let {
+            removeCallbacks(it)
+        }
+
+        pendingAnswerAction = null
         question = newQuestion
         selectedIndex = null
+        answerWasCorrect = null
         answerLocked = false
         optionRects.clear()
+
         invalidate()
     }
 
@@ -120,7 +159,7 @@ class QuestionOverlayView(
             dp(8).toFloat(),
             dp(8).toFloat(),
             width - dp(8).toFloat(),
-            height - dp(8).toFloat()
+            height - dp(22).toFloat()
         )
 
         canvas.drawRoundRect(
@@ -134,33 +173,22 @@ class QuestionOverlayView(
 
         val horizontalPadding = dp(22)
 
-        val availableTextWidth =
-            width -
-                horizontalPadding * 2
-
         val questionLayout =
-            StaticLayout.Builder.obtain(
-                currentQuestion.prompt,
-                0,
-                currentQuestion.prompt.length,
-                questionTextPaint,
-                availableTextWidth
-            )
-                .setAlignment(
+            createTextLayout(
+                text = currentQuestion.prompt,
+                paint = questionTextPaint,
+                width =
+                    width -
+                        horizontalPadding * 2,
+                alignment =
                     Layout.Alignment.ALIGN_CENTER
-                )
-                .setIncludePad(false)
-                .setLineSpacing(
-                    0f,
-                    1.05f
-                )
-                .build()
+            )
 
         canvas.save()
 
         canvas.translate(
             horizontalPadding.toFloat(),
-            dp(24).toFloat()
+            dp(23).toFloat()
         )
 
         questionLayout.draw(canvas)
@@ -169,9 +197,9 @@ class QuestionOverlayView(
 
         val optionsStartY = max(
             dp(92),
-            dp(24) +
+            dp(23) +
                 questionLayout.height +
-                dp(18)
+                dp(16)
         )
 
         optionRects.clear()
@@ -184,8 +212,8 @@ class QuestionOverlayView(
                 val optionTop =
                     optionsStartY +
                         index * (
-                            dp(46) +
-                                dp(9)
+                            dp(48) +
+                                dp(8)
                             )
 
                 val rect = RectF(
@@ -195,7 +223,7 @@ class QuestionOverlayView(
                         dp(20).toFloat(),
                     (
                         optionTop +
-                            dp(46)
+                            dp(48)
                         ).toFloat()
                 )
 
@@ -209,43 +237,20 @@ class QuestionOverlayView(
                     question = currentQuestion
                 )
             }
-    }
 
-    private fun drawPointer(
-        canvas: Canvas
-    ) {
-        val pointerPaint =
-            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.WHITE
-            }
-
-        val centerX = width / 2f
-        val bottom = height - dp(1).toFloat()
-
-        val path =
-            android.graphics.Path().apply {
-                moveTo(
-                    centerX - dp(13),
-                    bottom - dp(15)
-                )
-
-                lineTo(
-                    centerX,
-                    bottom
-                )
-
-                lineTo(
-                    centerX + dp(13),
-                    bottom - dp(15)
-                )
-
-                close()
-            }
-
-        canvas.drawPath(
-            path,
-            pointerPaint
-        )
+        if (answerWasCorrect != null) {
+            drawAnswerFeedback(
+                canvas = canvas,
+                question = currentQuestion,
+                topY =
+                    optionsStartY +
+                        3 * (
+                            dp(48) +
+                                dp(8)
+                            ) +
+                        dp(3)
+            )
+        }
     }
 
     private fun drawOption(
@@ -255,38 +260,14 @@ class QuestionOverlayView(
         option: String,
         question: QuizQuestion
     ) {
-        val selected =
-            selectedIndex == index
-
         optionPaint.style =
             Paint.Style.FILL
 
-        optionPaint.color = when {
-            !selected -> {
-                Color.rgb(
-                    242,
-                    239,
-                    252
-                )
-            }
-
-            index ==
-                question.correctIndex -> {
-                Color.rgb(
-                    201,
-                    241,
-                    211
-                )
-            }
-
-            else -> {
-                Color.rgb(
-                    255,
-                    211,
-                    207
-                )
-            }
-        }
+        optionPaint.color =
+            getOptionColor(
+                index = index,
+                question = question
+            )
 
         canvas.drawRoundRect(
             rect,
@@ -301,39 +282,220 @@ class QuestionOverlayView(
             else -> "C"
         }
 
-        optionTextPaint.textAlign =
-            Paint.Align.CENTER
-
         val letterCenterX =
-            rect.left +
-                dp(25)
+            rect.left + dp(25)
 
         val textCenterY =
             rect.centerY() -
                 (
-                    optionTextPaint
-                        .fontMetrics
-                        .ascent +
-                        optionTextPaint
-                            .fontMetrics
-                            .descent
+                    letterPaint.fontMetrics.ascent +
+                        letterPaint.fontMetrics.descent
                     ) / 2f
 
         canvas.drawText(
             letter,
             letterCenterX,
             textCenterY,
-            optionTextPaint
+            letterPaint
         )
 
-        optionTextPaint.textAlign =
-            Paint.Align.LEFT
+        val optionLayout =
+            createTextLayout(
+                text = option,
+                paint = optionTextPaint,
+                width =
+                    (
+                        rect.width() -
+                            dp(65)
+                        ).toInt(),
+                alignment =
+                    Layout.Alignment.ALIGN_NORMAL
+            )
 
-        canvas.drawText(
-            option,
+        canvas.save()
+
+        canvas.translate(
             rect.left + dp(50),
-            textCenterY,
-            optionTextPaint
+            rect.centerY() -
+                optionLayout.height / 2f
+        )
+
+        optionLayout.draw(canvas)
+
+        canvas.restore()
+    }
+
+    private fun getOptionColor(
+        index: Int,
+        question: QuizQuestion
+    ): Int {
+        if (answerWasCorrect == null) {
+            return Color.rgb(
+                242,
+                239,
+                252
+            )
+        }
+
+        if (index == question.correctIndex) {
+            return Color.rgb(
+                190,
+                239,
+                204
+            )
+        }
+
+        if (index == selectedIndex) {
+            return Color.rgb(
+                255,
+                203,
+                198
+            )
+        }
+
+        return Color.rgb(
+            242,
+            239,
+            252
+        )
+    }
+
+    private fun drawAnswerFeedback(
+        canvas: Canvas,
+        question: QuizQuestion,
+        topY: Int
+    ) {
+        val isCorrect =
+            answerWasCorrect ?: return
+
+        val isTurkish =
+            question.localeCode
+                .lowercase()
+                .startsWith("tr")
+
+        feedbackTextPaint.color =
+            if (isCorrect) {
+                Color.rgb(
+                    35,
+                    145,
+                    72
+                )
+            } else {
+                Color.rgb(
+                    205,
+                    63,
+                    55
+                )
+            }
+
+        val title =
+            if (isCorrect) {
+                if (isTurkish) {
+                    "Doğru! Harika 🎉"
+                } else {
+                    "Correct! Great job 🎉"
+                }
+            } else {
+                val correctAnswer =
+                    question.options[
+                        question.correctIndex
+                    ]
+
+                if (isTurkish) {
+                    "Yanlış. Doğru cevap: $correctAnswer"
+                } else {
+                    "Wrong. Correct answer: $correctAnswer"
+                }
+            }
+
+        val titleLayout =
+            createTextLayout(
+                text = title,
+                paint = feedbackTextPaint,
+                width = width - dp(44),
+                alignment =
+                    Layout.Alignment.ALIGN_CENTER
+            )
+
+        canvas.save()
+
+        canvas.translate(
+            dp(22).toFloat(),
+            topY.toFloat()
+        )
+
+        titleLayout.draw(canvas)
+
+        canvas.restore()
+
+        if (question.explanation.isBlank()) {
+            return
+        }
+
+        val explanationLayout =
+            createTextLayout(
+                text = question.explanation,
+                paint = explanationTextPaint,
+                width = width - dp(50),
+                alignment =
+                    Layout.Alignment.ALIGN_CENTER
+            )
+
+        canvas.save()
+
+        canvas.translate(
+            dp(25).toFloat(),
+            (
+                topY +
+                    titleLayout.height +
+                    dp(5)
+                ).toFloat()
+        )
+
+        explanationLayout.draw(canvas)
+
+        canvas.restore()
+    }
+
+    private fun drawPointer(
+        canvas: Canvas
+    ) {
+        val pointerPaint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+            }
+
+        val centerX = width / 2f
+
+        val pointerTop =
+            height - dp(30).toFloat()
+
+        val pointerBottom =
+            height - dp(4).toFloat()
+
+        val path =
+            Path().apply {
+                moveTo(
+                    centerX - dp(14),
+                    pointerTop
+                )
+
+                lineTo(
+                    centerX,
+                    pointerBottom
+                )
+
+                lineTo(
+                    centerX + dp(14),
+                    pointerTop
+                )
+
+                close()
+            }
+
+        canvas.drawPath(
+            path,
+            pointerPaint
         )
     }
 
@@ -370,19 +532,31 @@ class QuestionOverlayView(
 
         answerLocked = true
         selectedIndex = index
-        invalidate()
 
         val isCorrect =
             index ==
                 currentQuestion.correctIndex
 
-        postDelayed(
-            {
+        answerWasCorrect =
+            isCorrect
+
+        invalidate()
+
+        val action =
+            Runnable {
                 onAnswerSelected(
+                    index,
                     isCorrect
                 )
-            },
-            550L
+
+                pendingAnswerAction = null
+            }
+
+        pendingAnswerAction = action
+
+        postDelayed(
+            action,
+            1400L
         )
 
         return true
@@ -392,6 +566,38 @@ class QuestionOverlayView(
         Boolean {
         super.performClick()
         return true
+    }
+
+    override fun onDetachedFromWindow() {
+        pendingAnswerAction?.let {
+            removeCallbacks(it)
+        }
+
+        pendingAnswerAction = null
+
+        super.onDetachedFromWindow()
+    }
+
+    private fun createTextLayout(
+        text: String,
+        paint: TextPaint,
+        width: Int,
+        alignment: Layout.Alignment
+    ): StaticLayout {
+        return StaticLayout.Builder.obtain(
+            text,
+            0,
+            text.length,
+            paint,
+            width.coerceAtLeast(1)
+        )
+            .setAlignment(alignment)
+            .setIncludePad(false)
+            .setLineSpacing(
+                0f,
+                1.04f
+            )
+            .build()
     }
 
     private fun dp(
@@ -405,7 +611,10 @@ class QuestionOverlayView(
     private fun sp(
         value: Int
     ): Float {
-        return value *
-            scaledDensity
+        return TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_SP,
+            value.toFloat(),
+            resources.displayMetrics
+        )
     }
 }
