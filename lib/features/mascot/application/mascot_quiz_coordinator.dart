@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import '../../quiz/application/quiz_controller.dart';
-import '../domain/entities/mascot_quiz_answer.dart';
 import '../data/services/mascot_overlay_platform_service.dart';
+import '../domain/entities/mascot_quiz_answer.dart';
 import 'mascot_controller.dart';
 
 class MascotQuizCoordinator {
@@ -20,12 +20,28 @@ class MascotQuizCoordinator {
 
   StreamSubscription<MascotQuizAnswer>? _answerSubscription;
 
+  StreamSubscription<void>? _nextQuestionSubscription;
+
+  StreamSubscription<void>? _mascotDismissedSubscription;
+
   String _localeCode = 'en';
 
   void initialize() {
     _answerSubscription ??= _platformService.quizAnswers.listen(
       _handleQuizAnswer,
     );
+
+    _nextQuestionSubscription ??= _platformService.nextQuestionRequests.listen((
+      _,
+    ) async {
+      await _sendNextQuestion();
+    });
+
+    _mascotDismissedSubscription ??= _platformService.mascotDismissed.listen((
+      _,
+    ) async {
+      await _mascotController.stopMascot();
+    });
   }
 
   Future<void> startMascot({required String localeCode}) async {
@@ -55,7 +71,8 @@ class MascotQuizCoordinator {
 
     _quizController.recordAnswer(selectedIndex: answer.selectedIndex);
 
-    await _sendNextQuestion();
+    // Yeni soru burada gönderilmiyor.
+    // Kullanıcı "Evet" derse gönderilecek.
   }
 
   Future<void> _sendNextQuestion() async {
@@ -68,6 +85,11 @@ class MascotQuizCoordinator {
 
   Future<void> dispose() async {
     await _answerSubscription?.cancel();
+    await _nextQuestionSubscription?.cancel();
+    await _mascotDismissedSubscription?.cancel();
+
     _answerSubscription = null;
+    _nextQuestionSubscription = null;
+    _mascotDismissedSubscription = null;
   }
 }

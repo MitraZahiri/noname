@@ -80,11 +80,22 @@ class MascotOverlayService : Service() {
             OverlayWindowController(
                 context = this,
                 onQuizAnswered =
+                    OverlayFlutterBridge::
+                        sendQuizAnswered,
+                onNextQuestionRequested =
+                    OverlayFlutterBridge::
+                        sendNextQuestionRequested,
+                onDismissRequested = {
                     OverlayFlutterBridge
-                        ::sendQuizAnswered
+                        .sendMascotDismissed()
+
+                    stopSelf()
+                }
             )
 
-        pendingQuestion?.let { question ->
+        pendingQuestion?.let {
+            question ->
+
             windowController.setQuestion(
                 question
             )
@@ -108,7 +119,9 @@ class MascotOverlayService : Service() {
             ACTION_SHOW,
             null -> {
                 if (
-                    Settings.canDrawOverlays(this)
+                    Settings.canDrawOverlays(
+                        this
+                    )
                 ) {
                     windowController.show()
                 } else {

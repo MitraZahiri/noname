@@ -15,8 +15,22 @@ class MascotOverlayPlatformService {
   final StreamController<MascotQuizAnswer> _quizAnswersController =
       StreamController<MascotQuizAnswer>.broadcast();
 
+  final StreamController<void> _nextQuestionRequestsController =
+      StreamController<void>.broadcast();
+
+  final StreamController<void> _mascotDismissedController =
+      StreamController<void>.broadcast();
+
   Stream<MascotQuizAnswer> get quizAnswers {
     return _quizAnswersController.stream;
+  }
+
+  Stream<void> get nextQuestionRequests {
+    return _nextQuestionRequestsController.stream;
+  }
+
+  Stream<void> get mascotDismissed {
+    return _mascotDismissedController.stream;
   }
 
   bool get isSupported {
@@ -95,6 +109,16 @@ class MascotOverlayPlatformService {
 
         return null;
 
+      case 'nextQuestionRequested':
+        _nextQuestionRequestsController.add(null);
+
+        return null;
+
+      case 'mascotDismissed':
+        _mascotDismissedController.add(null);
+
+        return null;
+
       default:
         throw MissingPluginException('Unknown native method: ${call.method}');
     }
@@ -102,6 +126,9 @@ class MascotOverlayPlatformService {
 
   Future<void> dispose() async {
     _channel.setMethodCallHandler(null);
+
     await _quizAnswersController.close();
+    await _nextQuestionRequestsController.close();
+    await _mascotDismissedController.close();
   }
 }

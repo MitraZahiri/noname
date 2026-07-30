@@ -7,21 +7,28 @@ import java.util.ArrayDeque
 
 object OverlayFlutterBridge {
 
+    private data class PendingCall(
+        val method: String,
+        val arguments: Any?
+    )
+
     private val mainHandler =
-        Handler(Looper.getMainLooper())
+        Handler(
+            Looper.getMainLooper()
+        )
 
     private var channel:
         MethodChannel? = null
 
-    private val pendingAnswers =
-        ArrayDeque<Map<String, Any>>()
+    private val pendingCalls =
+        ArrayDeque<PendingCall>()
 
     fun attach(
         newChannel: MethodChannel
     ) {
         mainHandler.post {
             channel = newChannel
-            flushPendingAnswers()
+            flushPendingCalls()
         }
     }
 
@@ -40,36 +47,75 @@ object OverlayFlutterBridge {
         selectedIndex: Int,
         isCorrect: Boolean
     ) {
-        val payload =
-            mapOf<String, Any>(
-                "questionId" to questionId,
-                "selectedIndex" to selectedIndex,
-                "isCorrect" to isCorrect
-            )
+        send(
+            method = "quizAnswered",
+            arguments =
+                mapOf<String, Any>(
+                    "questionId" to
+                        questionId,
+                    "selectedIndex" to
+                        selectedIndex,
+                    "isCorrect" to
+                        isCorrect
+                )
+        )
+    }
 
+    fun sendNextQuestionRequested() {
+        send(
+            method =
+                "nextQuestionRequested",
+            arguments = null
+        )
+    }
+
+    fun sendMascotDismissed() {
+        send(
+            method =
+                "mascotDismissed",
+            arguments = null
+        )
+    }
+
+    private fun send(
+        method: String,
+        arguments: Any?
+    ) {
         mainHandler.post {
-            val activeChannel = channel
+            val activeChannel =
+                channel
 
             if (activeChannel == null) {
-                pendingAnswers.addLast(payload)
+                pendingCalls.addLast(
+                    PendingCall(
+                        method = method,
+                        arguments = arguments
+                    )
+                )
+
                 return@post
             }
 
             activeChannel.invokeMethod(
-                "quizAnswered",
-                payload
+                method,
+                arguments
             )
         }
     }
 
-    private fun flushPendingAnswers() {
+    private fun flushPendingCalls() {
         val activeChannel =
             channel ?: return
 
-        while (pendingAnswers.isNotEmpty()) {
+        while (
+            pendingCalls.isNotEmpty()
+        ) {
+            val call =
+                pendingCalls.removeFirst()
+
             activeChannel.invokeMethod(
-                "quizAnswered",
-                pendingAnswers.removeFirst()
+                call.method,
+                call.arguments
             )
         }
     }
