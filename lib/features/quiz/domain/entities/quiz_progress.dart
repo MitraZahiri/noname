@@ -1,4 +1,4 @@
-class QuizProgress {
+﻿class QuizProgress {
   const QuizProgress({
     required this.totalAnswered,
     required this.correctAnswers,
@@ -8,11 +8,13 @@ class QuizProgress {
   });
 
   const QuizProgress.empty()
-    : totalAnswered = 0,
-      correctAnswers = 0,
-      currentStreak = 0,
-      bestStreak = 0,
-      score = 0;
+      : totalAnswered = 0,
+        correctAnswers = 0,
+        currentStreak = 0,
+        bestStreak = 0,
+        score = 0;
+
+  static const int xpPerLevel = 100;
 
   final int totalAnswered;
   final int correctAnswers;
@@ -36,7 +38,25 @@ class QuizProgress {
     return (accuracy * 100).round();
   }
 
-  QuizProgress recordAnswer({required bool isCorrect}) {
+  int get level {
+    return (score ~/ xpPerLevel) + 1;
+  }
+
+  int get xpInCurrentLevel {
+    return score % xpPerLevel;
+  }
+
+  int get xpToNextLevel {
+    return xpPerLevel - xpInCurrentLevel;
+  }
+
+  double get levelProgress {
+    return xpInCurrentLevel / xpPerLevel;
+  }
+
+  QuizProgress recordAnswer({
+    required bool isCorrect,
+  }) {
     if (!isCorrect) {
       return QuizProgress(
         totalAnswered: totalAnswered + 1,
@@ -49,7 +69,8 @@ class QuizProgress {
 
     final nextStreak = currentStreak + 1;
 
-    final nextBestStreak = nextStreak > bestStreak ? nextStreak : bestStreak;
+    final nextBestStreak =
+        nextStreak > bestStreak ? nextStreak : bestStreak;
 
     final bonusLevel = nextStreak > 6 ? 5 : nextStreak - 1;
     final earnedPoints = 10 + bonusLevel * 2;
