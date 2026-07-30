@@ -15,8 +15,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homeTitle => 'Your screen has a new inhabitant';
 
   @override
-  String get homeSubtitle =>
-      'Your mascot appears while you use other applications and brings quick knowledge challenges.';
+  String get homeSubtitle => 'Your mascot appears while you use other applications and brings quick knowledge challenges.';
 
   @override
   String get mascotStatus => 'Mascot status';
@@ -49,8 +48,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get languageTurkish => 'Turkish';
 
   @override
-  String get developmentNotice =>
-      'The screen overlay connection will be added in the next development step.';
+  String get developmentNotice => 'The screen overlay connection will be added in the next development step.';
 
   @override
   String get overlayPermissionTitle => 'Display over other apps';
@@ -62,13 +60,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get overlayPermissionRequired => 'Permission required';
 
   @override
-  String get overlayPermissionDescription =>
-      'Allow NoName to appear over other applications.';
+  String get overlayPermissionDescription => 'Allow NoName to appear over other applications.';
 
   @override
   String get grantOverlayPermission => 'Grant overlay permission';
 
   @override
-  String get permissionError =>
-      'The permission operation could not be completed.';
+  String get permissionError => 'The permission operation could not be completed.';
 }
