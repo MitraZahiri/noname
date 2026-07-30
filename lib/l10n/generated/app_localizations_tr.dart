@@ -15,7 +15,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get homeTitle => 'Ekranının artık yeni bir sakini var';
 
   @override
-  String get homeSubtitle => 'Maskotun diğer uygulamaları kullanırken ortaya çıkar ve kısa bilgi soruları getirir.';
+  String get homeSubtitle =>
+      'Maskotun diğer uygulamaları kullanırken ortaya çıkar ve kısa bilgi soruları getirir.';
 
   @override
   String get mascotStatus => 'Maskot durumu';
@@ -48,7 +49,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get languageTurkish => 'Türkçe';
 
   @override
-  String get developmentNotice => 'Ekran üstü karakter bağlantısı sonraki geliştirme adımında eklenecek.';
+  String get developmentNotice =>
+      'Ekran üstü karakter bağlantısı sonraki geliştirme adımında eklenecek.';
 
   @override
   String get overlayPermissionTitle => 'Diğer uygulamaların üzerinde göster';
@@ -60,7 +62,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get overlayPermissionRequired => 'İzin gerekli';
 
   @override
-  String get overlayPermissionDescription => 'NoName\'in diğer uygulamaların üzerinde görünmesine izin ver.';
+  String get overlayPermissionDescription =>
+      'NoName\'in diğer uygulamaların üzerinde görünmesine izin ver.';
 
   @override
   String get grantOverlayPermission => 'Ekran üstü izni ver';
