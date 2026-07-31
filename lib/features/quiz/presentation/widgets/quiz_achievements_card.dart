@@ -17,6 +17,8 @@ class QuizAchievementsCard extends StatelessWidget {
 
         final achievements = QuizAchievement.fromProgress(controller.progress);
 
+        final latestUnlocked = controller.latestUnlockedAchievement;
+
         final unlockedCount =
             achievements.where((achievement) => achievement.isUnlocked).length;
 
@@ -38,6 +40,21 @@ class QuizAchievementsCard extends StatelessWidget {
                             ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                     ),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 350),
+                      child:
+                          latestUnlocked == null
+                              ? const SizedBox.shrink()
+                              : Padding(
+                                key: ValueKey(latestUnlocked),
+                                padding: const EdgeInsets.only(bottom: 18),
+                                child: _AchievementUnlockedBanner(
+                                  type: latestUnlocked,
+                                  isTurkish: isTurkish,
+                                  onDismiss: controller.clearLatestAchievement,
+                                ),
+                              ),
+                    ),
                     Text(
                       '$unlockedCount/${achievements.length}',
                       style: Theme.of(context).textTheme.labelLarge?.copyWith(
@@ -46,6 +63,7 @@ class QuizAchievementsCard extends StatelessWidget {
                     ),
                   ],
                 ),
+
                 const SizedBox(height: 18),
                 ...achievements.map(
                   (achievement) => Padding(
@@ -204,4 +222,84 @@ class _AchievementContent {
   final String title;
   final String description;
   final IconData icon;
+}
+
+class _AchievementUnlockedBanner extends StatelessWidget {
+  const _AchievementUnlockedBanner({
+    required this.type,
+    required this.isTurkish,
+    required this.onDismiss,
+  });
+
+  final QuizAchievementType type;
+  final bool isTurkish;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = switch (type) {
+      QuizAchievementType.firstAnswer => isTurkish ? 'İlk Adım' : 'First Step',
+      QuizAchievementType.curiousMind =>
+        isTurkish ? 'Meraklı Zihin' : 'Curious Mind',
+      QuizAchievementType.onFire => isTurkish ? 'Alev Aldın' : 'On Fire',
+      QuizAchievementType.knowledgeHunter =>
+        isTurkish ? 'Bilgi Avcısı' : 'Knowledge Hunter',
+      QuizAchievementType.triviaMaster =>
+        isTurkish ? 'Usta Bilgin' : 'Trivia Master',
+    };
+
+    final icon = switch (type) {
+      QuizAchievementType.firstAnswer => Icons.flag_outlined,
+      QuizAchievementType.curiousMind => Icons.psychology_outlined,
+      QuizAchievementType.onFire => Icons.local_fire_department,
+      QuizAchievementType.knowledgeHunter => Icons.travel_explore,
+      QuizAchievementType.triviaMaster => Icons.military_tech_outlined,
+    };
+
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+      decoration: BoxDecoration(
+        color: colorScheme.tertiaryContainer,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colorScheme.tertiary.withValues(alpha: 0.45)),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            backgroundColor: colorScheme.tertiary,
+            foregroundColor: colorScheme.onTertiary,
+            child: Icon(icon),
+          ),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isTurkish
+                      ? 'Yeni rozet kazandın! 🎉'
+                      : 'New achievement unlocked! 🎉',
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: isTurkish ? 'Kapat' : 'Close',
+            onPressed: onDismiss,
+            icon: const Icon(Icons.close),
+          ),
+        ],
+      ),
+    );
+  }
 }
