@@ -12,7 +12,9 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(
         flutterEngine: FlutterEngine
     ) {
-        super.configureFlutterEngine(flutterEngine)
+        super.configureFlutterEngine(
+            flutterEngine
+        )
 
         overlayChannelHandler =
             OverlayChannelHandler(
@@ -21,9 +23,9 @@ class MainActivity : FlutterActivity() {
                     flutterEngine
                         .dartExecutor
                         .binaryMessenger
-            ).also {
-                it.register()
-            }
+            )
+
+        overlayChannelHandler?.register()
     }
 
     override fun cleanUpFlutterEngine(
@@ -32,6 +34,8 @@ class MainActivity : FlutterActivity() {
         overlayChannelHandler?.dispose()
         overlayChannelHandler = null
 
-        super.cleanUpFlutterEngine(flutterEngine)
+        super.cleanUpFlutterEngine(
+            flutterEngine
+        )
     }
 }

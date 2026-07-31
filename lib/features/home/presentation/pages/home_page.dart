@@ -2,16 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:noname/core/localization/locale_controller.dart';
 import 'package:noname/features/mascot/application/mascot_controller.dart';
 import 'package:noname/l10n/generated/app_localizations.dart';
+import 'package:noname/features/quiz/application/quiz_controller.dart';
+import 'package:noname/features/mascot/application/mascot_quiz_coordinator.dart';
+import 'package:noname/features/quiz/presentation/widgets/quiz_progress_card.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({
     required this.localeController,
     required this.mascotController,
+    required this.quizController,
+    required this.mascotQuizCoordinator,
     super.key,
   });
 
   final LocaleController localeController;
   final MascotController mascotController;
+  final QuizController quizController;
+  final MascotQuizCoordinator mascotQuizCoordinator;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -98,7 +105,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             await controller.stopMascot();
                           }
                           : () async {
-                            await controller.startMascot();
+                            final localeCode =
+                                Localizations.localeOf(context).languageCode;
+
+                            await widget.mascotQuizCoordinator.startMascot(
+                              localeCode: localeCode,
+                            );
                           },
                   icon: Icon(
                     !permissionGranted
@@ -138,8 +150,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     style: TextStyle(color: colors.error),
                   ),
                 ],
-
                 const SizedBox(height: 32),
+
+                QuizProgressCard(controller: widget.quizController),
+                const SizedBox(height: 16),
 
                 Text(
                   localizations.language,

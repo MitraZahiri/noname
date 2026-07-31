@@ -1,4 +1,4 @@
-package com.meetra.noname.channel
+﻿package com.meetra.noname.channel
 
 import android.Manifest
 import android.app.Activity
@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import com.meetra.noname.overlay.MascotOverlayService
+import com.meetra.noname.overlay.quiz.QuizQuestion
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
 
@@ -24,12 +25,15 @@ class OverlayChannelHandler(
             4201
     }
 
-    private val channel = MethodChannel(
-        messenger,
-        CHANNEL_NAME
-    )
+    private val channel =
+        MethodChannel(
+            messenger,
+            CHANNEL_NAME
+        )
 
     fun register() {
+        OverlayFlutterBridge.attach(channel)
+
         channel.setMethodCallHandler { call, result ->
             when (call.method) {
                 "hasOverlayPermission" -> {
@@ -41,6 +45,25 @@ class OverlayChannelHandler(
                 "requestOverlayPermission" -> {
                     openOverlayPermissionSettings()
                     result.success(null)
+                }
+
+                "setQuizQuestion" -> {
+                    runCatching {
+                        QuizQuestion.fromPlatformMap(
+                            call.arguments
+                        )
+                    }.onSuccess { question ->
+                        MascotOverlayService
+                            .updateQuizQuestion(question)
+
+                        result.success(true)
+                    }.onFailure { error ->
+                        result.error(
+                            "invalid_quiz_question",
+                            error.message,
+                            null
+                        )
+                    }
                 }
 
                 "startMascotOverlay" -> {
@@ -55,6 +78,7 @@ class OverlayChannelHandler(
                     }
 
                     requestNotificationPermissionIfNeeded()
+
                     startOverlayService(
                         MascotOverlayService.ACTION_START
                     )
@@ -68,16 +92,24 @@ class OverlayChannelHandler(
                 }
 
                 "showMascotOverlay" -> {
-                    if (!MascotOverlayService.isRunning) {
-                        startOverlayService(
-                            MascotOverlayService.ACTION_START
+                    if (!Settings.canDrawOverlays(activity)) {
+                        result.error(
+                            "overlay_permission_required",
+                            "Overlay permission is required.",
+                            null
                         )
-                    } else {
-                        startOverlayService(
-                            MascotOverlayService.ACTION_SHOW
-                        )
+
+                        return@setMethodCallHandler
                     }
 
+                    val action =
+                        if (MascotOverlayService.isRunning) {
+                            MascotOverlayService.ACTION_SHOW
+                        } else {
+                            MascotOverlayService.ACTION_START
+                        }
+
+                    startOverlayService(action)
                     result.success(true)
                 }
 
@@ -95,21 +127,22 @@ class OverlayChannelHandler(
     }
 
     fun dispose() {
+        OverlayFlutterBridge.detach(channel)
         channel.setMethodCallHandler(null)
     }
 
     private fun openOverlayPermissionSettings() {
         val intent = Intent(
             Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-            Uri.parse(
-                "package:${activity.packageName}"
-            )
+            Uri.parse("package:${activity.packageName}")
         )
 
         activity.startActivity(intent)
     }
 
-    private fun startOverlayService(action: String) {
+    private fun startOverlayService(
+        action: String
+    ) {
         val intent = Intent(
             activity,
             MascotOverlayService::class.java
@@ -132,7 +165,8 @@ class OverlayChannelHandler(
             activity,
             MascotOverlayService::class.java
         ).apply {
-            action = MascotOverlayService.ACTION_STOP
+            action =
+                MascotOverlayService.ACTION_STOP
         }
 
         activity.startService(intent)
@@ -149,7 +183,8 @@ class OverlayChannelHandler(
         if (
             activity.checkSelfPermission(
                 Manifest.permission.POST_NOTIFICATIONS
-            ) == PackageManager.PERMISSION_GRANTED
+            ) ==
+            PackageManager.PERMISSION_GRANTED
         ) {
             return
         }
