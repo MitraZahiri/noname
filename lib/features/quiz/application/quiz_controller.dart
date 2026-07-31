@@ -6,6 +6,7 @@ import '../domain/entities/quiz_progress.dart';
 import '../domain/entities/quiz_question.dart';
 import '../domain/repositories/quiz_progress_repository.dart';
 import '../domain/repositories/quiz_repository.dart';
+import '../domain/entities/quiz_achievement.dart';
 
 class QuizController extends ChangeNotifier {
   QuizController({
@@ -26,6 +27,8 @@ class QuizController extends ChangeNotifier {
 
   QuizProgress _progress = const QuizProgress.empty();
 
+  QuizAchievementType? _latestUnlockedAchievement;
+
   String? _answeredQuestionId;
 
   bool _isInitialized = false;
@@ -37,6 +40,9 @@ class QuizController extends ChangeNotifier {
   QuizDifficulty get difficulty => _difficulty;
 
   QuizProgress get progress => _progress;
+
+  QuizAchievementType? get latestUnlockedAchievement =>
+      _latestUnlockedAchievement;
 
   Future<void> initialize() async {
     if (_isInitialized) {
@@ -108,7 +114,14 @@ class QuizController extends ChangeNotifier {
       isCorrect: isCorrect,
     );
 
+    final previousProgress = _progress;
+
     _progress = _progress.recordAnswer(isCorrect: isCorrect);
+
+    _latestUnlockedAchievement = _findNewAchievement(
+      previousProgress: previousProgress,
+      currentProgress: _progress,
+    );
 
     notifyListeners();
 
@@ -120,6 +133,39 @@ class QuizController extends ChangeNotifier {
         '$error\n$stackTrace',
       );
     }
+  }
+
+  QuizAchievementType? _findNewAchievement({
+    required QuizProgress previousProgress,
+    required QuizProgress currentProgress,
+  }) {
+    final previousUnlocked =
+        QuizAchievement.fromProgress(previousProgress)
+            .where((achievement) => achievement.isUnlocked)
+            .map((achievement) => achievement.type)
+            .toSet();
+
+    final currentAchievements = QuizAchievement.fromProgress(currentProgress);
+
+    for (final achievement in currentAchievements) {
+      if (achievement.isUnlocked &&
+          !previousUnlocked.contains(achievement.type)) {
+        return achievement.type;
+      }
+    }
+
+    return null;
+  }
+
+  void clearLatestAchievement() {
+    if (_latestUnlockedAchievement == null) {
+      return;
+    }
+
+    _latestUnlockedAchievement = null;
+    notifyListeners();
+
+    _latestUnlockedAchievement = null;
   }
 
   Future<void> resetProgress() async {
