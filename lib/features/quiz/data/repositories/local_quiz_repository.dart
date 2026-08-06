@@ -11,7 +11,9 @@ class LocalQuizRepository implements QuizRepository {
 
   final Random _random;
 
-  final Set<String> _recentQuestionIds = <String>{};
+  final Set<String> _usedQuestionIds = <String>{};
+
+  String? _lastQuestionId;
 
   @override
   QuizQuestion getNextQuestion({
@@ -21,48 +23,70 @@ class LocalQuizRepository implements QuizRepository {
   }) {
     final normalizedLocale = localeCode.toLowerCase().split('-').first;
 
-    var candidates =
-        QuizSeedData.questions.where((question) {
-          final localeMatches = question.localeCode == normalizedLocale;
-          final categoryMatches =
-              category == null || question.category == category;
-          final difficultyMatches =
-              difficulty == null || question.difficulty == difficulty;
-
-          return localeMatches && categoryMatches && difficultyMatches;
-        }).toList();
+    var candidates = _findQuestions(
+      localeCode: normalizedLocale,
+      category: category,
+      difficulty: difficulty,
+    );
 
     if (candidates.isEmpty && normalizedLocale != 'en') {
-      candidates =
-          QuizSeedData.questions.where((question) {
-            return question.localeCode == 'en' &&
-                (category == null || question.category == category) &&
-                (difficulty == null || question.difficulty == difficulty);
-          }).toList();
+      candidates = _findQuestions(
+        localeCode: 'en',
+        category: category,
+        difficulty: difficulty,
+      );
     }
 
     if (candidates.isEmpty) {
       throw StateError('No matching quiz questions are available.');
     }
 
-    final unseenQuestions =
-        candidates
-            .where((question) => !_recentQuestionIds.contains(question.id))
-            .toList();
+    var selectableQuestions =
+        candidates.where((question) {
+          final unused = !_usedQuestionIds.contains(question.id);
 
-    final selectableQuestions =
-        unseenQuestions.isNotEmpty ? unseenQuestions : candidates;
+          final isNotLastQuestion =
+              candidates.length == 1 || question.id != _lastQuestionId;
 
-    if (unseenQuestions.isEmpty) {
-      _recentQuestionIds.clear();
+          return unused && isNotLastQuestion;
+        }).toList();
+
+    if (selectableQuestions.isEmpty) {
+      _usedQuestionIds.removeAll(candidates.map((question) => question.id));
+
+      final questionsExceptLast =
+          candidates.where((question) {
+            return question.id != _lastQuestionId;
+          }).toList();
+
+      selectableQuestions =
+          questionsExceptLast.isNotEmpty ? questionsExceptLast : candidates;
     }
 
     final selected =
         selectableQuestions[_random.nextInt(selectableQuestions.length)];
 
-    _recentQuestionIds.add(selected.id);
+    _usedQuestionIds.add(selected.id);
+    _lastQuestionId = selected.id;
 
     return selected;
+  }
+
+  List<QuizQuestion> _findQuestions({
+    required String localeCode,
+    required QuizCategory? category,
+    required QuizDifficulty? difficulty,
+  }) {
+    return QuizSeedData.questions.where((question) {
+      final localeMatches = question.localeCode == localeCode;
+
+      final categoryMatches = category == null || question.category == category;
+
+      final difficultyMatches =
+          difficulty == null || question.difficulty == difficulty;
+
+      return localeMatches && categoryMatches && difficultyMatches;
+    }).toList();
   }
 
   @override
@@ -71,6 +95,6 @@ class LocalQuizRepository implements QuizRepository {
     required int selectedIndex,
     required bool isCorrect,
   }) {
-    // Sonraki aşamada doğru/yanlış sayıları yerel veritabanına yazılacak.
+    // İlerleme bilgileri QuizProgressRepository tarafından kaydediliyor.
   }
 }

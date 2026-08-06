@@ -164,14 +164,13 @@ class QuizController extends ChangeNotifier {
 
     _latestUnlockedAchievement = null;
     notifyListeners();
-
-    _latestUnlockedAchievement = null;
   }
 
   Future<void> resetProgress() async {
     _progress = const QuizProgress.empty();
 
     _answeredQuestionId = null;
+    _latestUnlockedAchievement = null;
 
     notifyListeners();
 

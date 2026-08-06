@@ -5,6 +5,8 @@ import 'package:noname/l10n/generated/app_localizations.dart';
 import 'package:noname/features/quiz/application/quiz_controller.dart';
 import 'package:noname/features/mascot/application/mascot_quiz_coordinator.dart';
 import 'package:noname/features/quiz/presentation/widgets/quiz_progress_card.dart';
+import 'package:noname/features/quiz/presentation/widgets/quiz_achievements_card.dart';
+import 'package:noname/features/quiz/presentation/widgets/quiz_category_selector_card.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -152,8 +154,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ],
                 const SizedBox(height: 32),
 
+                QuizCategorySelectorCard(controller: widget.quizController),
+                const SizedBox(height: 16),
+
                 QuizProgressCard(controller: widget.quizController),
                 const SizedBox(height: 16),
+
+                QuizAchievementsCard(controller: widget.quizController),
+                const SizedBox(height: 32),
 
                 Text(
                   localizations.language,
