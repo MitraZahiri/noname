@@ -7,6 +7,7 @@ import '../features/home/presentation/pages/home_page.dart';
 import '../features/mascot/application/mascot_controller.dart';
 import '../features/mascot/application/mascot_quiz_coordinator.dart';
 import '../features/quiz/application/quiz_controller.dart';
+import 'package:noname/features/companion/application/companion_controller.dart';
 
 class NonameApp extends StatelessWidget {
   const NonameApp({
@@ -14,6 +15,7 @@ class NonameApp extends StatelessWidget {
     required this.mascotController,
     required this.quizController,
     required this.mascotQuizCoordinator,
+    required this.companionController,
     super.key,
   });
 
@@ -21,6 +23,7 @@ class NonameApp extends StatelessWidget {
   final MascotController mascotController;
   final QuizController quizController;
   final MascotQuizCoordinator mascotQuizCoordinator;
+  final CompanionController companionController;
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +46,7 @@ class NonameApp extends StatelessWidget {
             mascotController: mascotController,
             quizController: quizController,
             mascotQuizCoordinator: mascotQuizCoordinator,
+            companionController: companionController,
           ),
         );
       },

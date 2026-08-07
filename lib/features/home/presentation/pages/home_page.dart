@@ -7,6 +7,8 @@ import 'package:noname/features/mascot/application/mascot_quiz_coordinator.dart'
 import 'package:noname/features/quiz/presentation/widgets/quiz_progress_card.dart';
 import 'package:noname/features/quiz/presentation/widgets/quiz_achievements_card.dart';
 import 'package:noname/features/quiz/presentation/widgets/quiz_category_selector_card.dart';
+import 'package:noname/features/companion/application/companion_controller.dart';
+import 'package:noname/features/companion/presentation/widgets/companion_habitat_card.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -14,12 +16,14 @@ class HomePage extends StatefulWidget {
     required this.mascotController,
     required this.quizController,
     required this.mascotQuizCoordinator,
+    required this.companionController,
     super.key,
   });
 
   final LocaleController localeController;
   final MascotController mascotController;
   final QuizController quizController;
+  final CompanionController companionController;
   final MascotQuizCoordinator mascotQuizCoordinator;
 
   @override
@@ -82,6 +86,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   ),
                 ),
                 const SizedBox(height: 28),
+
+                CompanionHabitatCard(controller: widget.companionController),
+                const SizedBox(height: 20),
 
                 _PermissionCard(
                   isBusy: controller.isBusy,
