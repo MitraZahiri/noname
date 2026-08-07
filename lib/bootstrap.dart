@@ -8,6 +8,8 @@ import 'features/mascot/data/services/mascot_overlay_platform_service.dart';
 import 'features/quiz/application/quiz_controller.dart';
 import 'features/quiz/data/repositories/local_quiz_repository.dart';
 import 'features/quiz/data/repositories/shared_preferences_quiz_progress_repository.dart';
+import 'features/companion/application/companion_controller.dart';
+import 'features/companion/data/repositories/shared_preferences_companion_repository.dart';
 
 Future<void> bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,6 +33,13 @@ Future<void> bootstrap() async {
     platformService: platformService,
   );
 
+  final companionController = CompanionController(
+    repository:
+        SharedPreferencesCompanionRepository(),
+  );
+
+  await companionController.initialize();
+
   mascotQuizCoordinator.initialize();
 
   runApp(
@@ -39,6 +48,7 @@ Future<void> bootstrap() async {
       mascotController: mascotController,
       quizController: quizController,
       mascotQuizCoordinator: mascotQuizCoordinator,
+      companionController: companionController,
     ),
   );
 }
