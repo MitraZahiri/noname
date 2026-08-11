@@ -1,23 +1,28 @@
 import 'package:flutter/foundation.dart';
 
+import '../domain/entities/quiz_achievement.dart';
 import '../domain/entities/quiz_category.dart';
 import '../domain/entities/quiz_difficulty.dart';
 import '../domain/entities/quiz_progress.dart';
 import '../domain/entities/quiz_question.dart';
 import '../domain/repositories/quiz_progress_repository.dart';
 import '../domain/repositories/quiz_repository.dart';
-import '../domain/entities/quiz_achievement.dart';
+
+typedef QuizAnswerRecordedCallback =
+    Future<void> Function({required bool isCorrect});
 
 class QuizController extends ChangeNotifier {
   QuizController({
     required QuizRepository repository,
     required QuizProgressRepository progressRepository,
+    QuizAnswerRecordedCallback? onAnswerRecorded,
   }) : _repository = repository,
-       _progressRepository = progressRepository;
+       _progressRepository = progressRepository,
+       _onAnswerRecorded = onAnswerRecorded;
 
   final QuizRepository _repository;
-
   final QuizProgressRepository _progressRepository;
+  final QuizAnswerRecordedCallback? _onAnswerRecorded;
 
   QuizQuestion? _activeQuestion;
 
@@ -49,7 +54,14 @@ class QuizController extends ChangeNotifier {
       return;
     }
 
-    _progress = await _progressRepository.load();
+    try {
+      _progress = await _progressRepository.load();
+    } catch (error, stackTrace) {
+      debugPrint(
+        'Quiz progress could not be loaded: '
+        '$error\n$stackTrace',
+      );
+    }
 
     _isInitialized = true;
 
@@ -77,6 +89,7 @@ class QuizController extends ChangeNotifier {
     }
 
     _preferredCategory = category;
+
     notifyListeners();
   }
 
@@ -86,6 +99,7 @@ class QuizController extends ChangeNotifier {
     }
 
     _difficulty = difficulty;
+
     notifyListeners();
   }
 
@@ -125,6 +139,19 @@ class QuizController extends ChangeNotifier {
 
     notifyListeners();
 
+    final onAnswerRecorded = _onAnswerRecorded;
+
+    if (onAnswerRecorded != null) {
+      try {
+        await onAnswerRecorded(isCorrect: isCorrect);
+      } catch (error, stackTrace) {
+        debugPrint(
+          'Companion could not receive quiz result: '
+          '$error\n$stackTrace',
+        );
+      }
+    }
+
     try {
       await _progressRepository.save(_progress);
     } catch (error, stackTrace) {
@@ -163,6 +190,7 @@ class QuizController extends ChangeNotifier {
     }
 
     _latestUnlockedAchievement = null;
+
     notifyListeners();
   }
 
