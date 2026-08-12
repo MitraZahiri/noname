@@ -4,6 +4,7 @@ enum CompanionStage { baby, child, explorer, scholar }
 
 class CompanionState {
   const CompanionState({
+    required this.name,
     required this.satiety,
     required this.happiness,
     required this.energy,
@@ -14,6 +15,7 @@ class CompanionState {
 
   factory CompanionState.initial() {
     return CompanionState(
+      name: 'Mimo',
       satiety: 80,
       happiness: 80,
       energy: 80,
@@ -29,6 +31,7 @@ class CompanionState {
   final int knowledge;
   final int totalInteractions;
   final DateTime lastUpdatedAt;
+  final String name;
 
   CompanionMood get mood {
     if (satiety <= 25) {
@@ -120,6 +123,7 @@ class CompanionState {
   }
 
   CompanionState copyWith({
+    String? name,
     int? satiety,
     int? happiness,
     int? energy,
@@ -128,6 +132,7 @@ class CompanionState {
     DateTime? lastUpdatedAt,
   }) {
     return CompanionState(
+      name: name ?? this.name,
       satiety: satiety ?? this.satiety,
       happiness: happiness ?? this.happiness,
       energy: energy ?? this.energy,
@@ -138,6 +143,6 @@ class CompanionState {
   }
 
   static int _clamp(int value) {
-    return value.clamp(0, 100);
+    return value.clamp(0, 100).toInt();
   }
 }
