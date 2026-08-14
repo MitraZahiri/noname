@@ -58,6 +58,7 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage> {
       animation: widget.controller,
       builder: (context, _) {
         final state = widget.controller.state;
+
         final isTurkish = Localizations.localeOf(context).languageCode == 'tr';
 
         return Scaffold(
@@ -78,6 +79,10 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage> {
                     onAction: _performAction,
                   ),
                 ),
+
+                _GrowthProgress(state: state, isTurkish: isTurkish),
+
+                _StatsPanel(state: state, isTurkish: isTurkish),
                 _StatsPanel(state: state, isTurkish: isTurkish),
               ],
             ),
@@ -127,16 +132,21 @@ class _HabitatRoom extends StatelessWidget {
             children: [
               Positioned(
                 top: 24,
-                left: 24,
-                child: Chip(
-                  label: Text(_moodText(state.mood, isTurkish: isTurkish)),
-                ),
+                right: 24,
+                child: _StageBadge(stage: state.stage, isTurkish: isTurkish),
               ),
 
               Positioned(
-                top: 24,
+                top: 82,
+                left: 24,
                 right: 24,
-                child: _StageBadge(stage: state.stage, isTurkish: isTurkish),
+                child: Center(
+                  child: _CompanionSpeechBubble(
+                    need: state.primaryNeed,
+                    name: state.name,
+                    isTurkish: isTurkish,
+                  ),
+                ),
               ),
 
               Positioned(
@@ -202,15 +212,73 @@ class _HabitatRoom extends StatelessWidget {
       },
     );
   }
+}
 
-  String _moodText(CompanionMood mood, {required bool isTurkish}) {
-    return switch (mood) {
-      CompanionMood.happy => isTurkish ? 'Mutlu 😊' : 'Happy 😊',
-      CompanionMood.curious => isTurkish ? 'Meraklı 🤓' : 'Curious 🤓',
-      CompanionMood.hungry => isTurkish ? 'Acıktı 😋' : 'Hungry 😋',
-      CompanionMood.sleepy => isTurkish ? 'Uykulu 😴' : 'Sleepy 😴',
-      CompanionMood.sad => isTurkish ? 'Biraz üzgün 🥺' : 'A little sad 🥺',
+class _CompanionSpeechBubble extends StatelessWidget {
+  const _CompanionSpeechBubble({
+    required this.need,
+    required this.name,
+    required this.isTurkish,
+  });
+
+  final CompanionNeed need;
+  final String name;
+  final bool isTurkish;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = switch (need) {
+      CompanionNeed.food =>
+        isTurkish
+            ? 'Acıktım! Bir şeyler yiyebilir miyim? 🍎'
+            : 'I am hungry! Can I have something to eat? 🍎',
+
+      CompanionNeed.happiness =>
+        isTurkish
+            ? 'Biraz benimle oynar mısın? 🎮'
+            : 'Will you play with me for a while? 🎮',
+
+      CompanionNeed.rest =>
+        isTurkish
+            ? 'Uykum geldi... Biraz dinlenmeliyim. 💤'
+            : 'I am sleepy... I should get some rest. 💤',
+
+      CompanionNeed.learning =>
+        isTurkish
+            ? 'Yeni bir şey öğrenmek istiyorum! 📚'
+            : 'I want to learn something new! 📚',
+
+      CompanionNeed.none =>
+        isTurkish
+            ? '$name bugün kendini harika hissediyor! 💜'
+            : '$name feels great today! 💜',
     };
+
+    final colors = Theme.of(context).colorScheme;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      constraints: const BoxConstraints(maxWidth: 310),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+      decoration: BoxDecoration(
+        color: colors.surface.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: colors.shadow.withValues(alpha: 0.10),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: Theme.of(
+          context,
+        ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+      ),
+    );
   }
 }
 
@@ -223,7 +291,7 @@ class _CompanionCharacter extends StatelessWidget {
 
   final CompanionState state;
   final _HabitatAction action;
-  final VoidCallback onPet;
+  final Future<void> Function() onPet;
 
   @override
   Widget build(BuildContext context) {
@@ -260,7 +328,12 @@ class _CompanionCharacter extends StatelessWidget {
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                CompanionMascot(mood: state.mood, pose: pose, width: 180),
+                CompanionMascot(
+                  mood: state.mood,
+                  pose: pose,
+                  width: 180,
+                  onTap: onPet,
+                ),
 
                 if (action == _HabitatAction.feeding)
                   const Positioned(
@@ -286,7 +359,9 @@ class _CompanionCharacter extends StatelessWidget {
             ),
           ),
         ),
+
         const SizedBox(height: 4),
+
         Text(
           state.name,
           style: Theme.of(
@@ -365,34 +440,148 @@ class _StatsPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       elevation: 8,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              _Stat(
+                icon: Icons.restaurant_rounded,
+                value: state.satiety,
+                label: isTurkish ? 'Tokluk' : 'Food',
+              ),
+              _Stat(
+                icon: Icons.favorite_rounded,
+                value: state.happiness,
+                label: isTurkish ? 'Mutluluk' : 'Happy',
+              ),
+              _Stat(
+                icon: Icons.bolt_rounded,
+                value: state.energy,
+                label: isTurkish ? 'Enerji' : 'Energy',
+              ),
+              _Stat(
+                icon: Icons.school_rounded,
+                value: state.knowledge,
+                label: isTurkish ? 'Bilgi' : 'Knowledge',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GrowthProgress extends StatelessWidget {
+  const _GrowthProgress({required this.state, required this.isTurkish});
+
+  final CompanionState state;
+  final bool isTurkish;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    final nextKnowledge = state.nextStageKnowledge;
+
+    final currentStage = _stageText(state.stage, isTurkish: isTurkish);
+
+    final nextStage = _nextStageText(state.stage, isTurkish: isTurkish);
+
+    final remainingKnowledge =
+        nextKnowledge == null
+            ? 0
+            : (nextKnowledge - state.knowledge).clamp(0, nextKnowledge).toInt();
+
+    return Material(
+      color: colors.surface,
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _Stat(
-              icon: Icons.restaurant_rounded,
-              value: state.satiety,
-              label: isTurkish ? 'Tokluk' : 'Food',
+            Row(
+              children: [
+                const Icon(Icons.auto_awesome_rounded, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isTurkish ? 'Gelişim' : 'Growth',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                Text(
+                  nextStage == null
+                      ? currentStage
+                      : '$currentStage → $nextStage',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+                ),
+              ],
             ),
-            _Stat(
-              icon: Icons.favorite_rounded,
-              value: state.happiness,
-              label: isTurkish ? 'Mutluluk' : 'Happy',
+
+            const SizedBox(height: 10),
+
+            ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: LinearProgressIndicator(
+                value: state.stageProgress,
+                minHeight: 9,
+              ),
             ),
-            _Stat(
-              icon: Icons.bolt_rounded,
-              value: state.energy,
-              label: isTurkish ? 'Enerji' : 'Energy',
-            ),
-            _Stat(
-              icon: Icons.school_rounded,
-              value: state.knowledge,
-              label: isTurkish ? 'Bilgi' : 'Knowledge',
+
+            const SizedBox(height: 7),
+
+            Row(
+              children: [
+                Text(
+                  isTurkish
+                      ? 'Bilgi: ${state.knowledge}'
+                      : 'Knowledge: ${state.knowledge}',
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
+
+                const Spacer(),
+
+                Text(
+                  nextKnowledge == null
+                      ? (isTurkish ? 'En yüksek aşama 🎓' : 'Highest stage 🎓')
+                      : (isTurkish
+                          ? '$remainingKnowledge bilgi kaldı'
+                          : '$remainingKnowledge knowledge left'),
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
       ),
     );
+  }
+
+  String _stageText(CompanionStage stage, {required bool isTurkish}) {
+    return switch (stage) {
+      CompanionStage.baby => isTurkish ? 'Bebek' : 'Baby',
+      CompanionStage.child => isTurkish ? 'Çocuk' : 'Child',
+      CompanionStage.explorer => isTurkish ? 'Kaşif' : 'Explorer',
+      CompanionStage.scholar => isTurkish ? 'Bilgin' : 'Scholar',
+    };
+  }
+
+  String? _nextStageText(CompanionStage stage, {required bool isTurkish}) {
+    return switch (stage) {
+      CompanionStage.baby => isTurkish ? 'Çocuk' : 'Child',
+      CompanionStage.child => isTurkish ? 'Kaşif' : 'Explorer',
+      CompanionStage.explorer => isTurkish ? 'Bilgin' : 'Scholar',
+      CompanionStage.scholar => null,
+    };
   }
 }
 
@@ -410,6 +599,7 @@ class _Stat extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 20),
+          const SizedBox(height: 2),
           Text('$value', style: const TextStyle(fontWeight: FontWeight.bold)),
           Text(
             label,

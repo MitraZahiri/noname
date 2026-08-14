@@ -2,6 +2,8 @@ enum CompanionMood { happy, curious, hungry, sleepy, sad }
 
 enum CompanionStage { baby, child, explorer, scholar }
 
+enum CompanionNeed { none, food, happiness, rest, learning }
+
 class CompanionState {
   const CompanionState({
     required this.name,
@@ -53,6 +55,26 @@ class CompanionState {
     return CompanionMood.happy;
   }
 
+  CompanionNeed get primaryNeed {
+    if (satiety <= 35) {
+      return CompanionNeed.food;
+    }
+
+    if (energy <= 35) {
+      return CompanionNeed.rest;
+    }
+
+    if (happiness <= 40) {
+      return CompanionNeed.happiness;
+    }
+
+    if (knowledge < 50) {
+      return CompanionNeed.learning;
+    }
+
+    return CompanionNeed.none;
+  }
+
   CompanionStage get stage {
     if (knowledge >= 500) {
       return CompanionStage.scholar;
@@ -67,6 +89,44 @@ class CompanionState {
     }
 
     return CompanionStage.baby;
+  }
+
+  int get stageStartKnowledge {
+    return switch (stage) {
+      CompanionStage.baby => 0,
+      CompanionStage.child => 50,
+      CompanionStage.explorer => 200,
+      CompanionStage.scholar => 500,
+    };
+  }
+
+  int? get nextStageKnowledge {
+    return switch (stage) {
+      CompanionStage.baby => 50,
+      CompanionStage.child => 200,
+      CompanionStage.explorer => 500,
+      CompanionStage.scholar => null,
+    };
+  }
+
+  double get stageProgress {
+    final nextKnowledge = nextStageKnowledge;
+
+    if (nextKnowledge == null) {
+      return 1.0;
+    }
+
+    final startKnowledge = stageStartKnowledge;
+
+    final requiredKnowledge = nextKnowledge - startKnowledge;
+
+    if (requiredKnowledge <= 0) {
+      return 1.0;
+    }
+
+    final earnedKnowledge = knowledge - startKnowledge;
+
+    return (earnedKnowledge / requiredKnowledge).clamp(0.0, 1.0);
   }
 
   CompanionState rename(String newName) {
