@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/companion_controller.dart';
 import '../../domain/entities/companion_state.dart';
+import '../widgets/companion_mascot.dart';
 
 enum _HabitatAction { none, feeding, playing, resting }
 
@@ -215,13 +216,23 @@ class _CompanionCharacter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
     final scale = switch (action) {
-      _HabitatAction.feeding => 1.12,
+      _HabitatAction.feeding => 1.10,
       _HabitatAction.playing => 1.08,
-      _HabitatAction.resting => 0.88,
+      _HabitatAction.resting => 0.90,
       _HabitatAction.none => 1.0,
+    };
+
+    final turns = switch (action) {
+      _HabitatAction.playing => 0.035,
+      _ => 0.0,
+    };
+
+    final pose = switch (action) {
+      _HabitatAction.feeding => CompanionMascotPose.feeding,
+      _HabitatAction.playing => CompanionMascotPose.playing,
+      _HabitatAction.resting => CompanionMascotPose.resting,
+      _HabitatAction.none => CompanionMascotPose.idle,
     };
 
     return Column(
@@ -232,50 +243,39 @@ class _CompanionCharacter extends StatelessWidget {
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
           child: AnimatedRotation(
-            turns: action == _HabitatAction.playing ? 0.04 : 0,
+            turns: turns,
             duration: const Duration(milliseconds: 250),
-            child: Container(
-              width: 165,
-              height: 165,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: colors.surface,
-                boxShadow: [
-                  BoxShadow(
-                    color: colors.shadow.withValues(alpha: 0.18),
-                    blurRadius: 28,
-                    offset: const Offset(0, 12),
+            curve: Curves.easeInOut,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                CompanionMascot(mood: state.mood, pose: pose, width: 180),
+
+                if (action == _HabitatAction.feeding)
+                  const Positioned(
+                    top: 30,
+                    right: -4,
+                    child: Text('🍎', style: TextStyle(fontSize: 34)),
                   ),
-                ],
-              ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Text(_emoji(), style: const TextStyle(fontSize: 88)),
-                  if (action == _HabitatAction.feeding)
-                    const Positioned(
-                      top: 4,
-                      right: 4,
-                      child: Text('🍎', style: TextStyle(fontSize: 32)),
-                    ),
-                  if (action == _HabitatAction.playing)
-                    const Positioned(
-                      top: 4,
-                      right: 4,
-                      child: Text('✨', style: TextStyle(fontSize: 32)),
-                    ),
-                  if (action == _HabitatAction.resting)
-                    const Positioned(
-                      top: 4,
-                      right: 4,
-                      child: Text('💤', style: TextStyle(fontSize: 32)),
-                    ),
-                ],
-              ),
+
+                if (action == _HabitatAction.playing)
+                  const Positioned(
+                    top: 20,
+                    right: -5,
+                    child: Text('✨', style: TextStyle(fontSize: 34)),
+                  ),
+
+                if (action == _HabitatAction.resting)
+                  const Positioned(
+                    top: 10,
+                    right: -8,
+                    child: Text('💤', style: TextStyle(fontSize: 36)),
+                  ),
+              ],
             ),
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 4),
         Text(
           state.name,
           style: Theme.of(
@@ -284,21 +284,6 @@ class _CompanionCharacter extends StatelessWidget {
         ),
       ],
     );
-  }
-
-  String _emoji() {
-    return switch (action) {
-      _HabitatAction.feeding => '😋',
-      _HabitatAction.playing => '😄',
-      _HabitatAction.resting => '😴',
-      _HabitatAction.none => switch (state.mood) {
-        CompanionMood.happy => '😊',
-        CompanionMood.curious => '🤓',
-        CompanionMood.hungry => '😋',
-        CompanionMood.sleepy => '😴',
-        CompanionMood.sad => '🥺',
-      },
-    };
   }
 }
 
