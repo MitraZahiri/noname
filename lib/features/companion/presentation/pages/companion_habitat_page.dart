@@ -63,12 +63,13 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage> {
 
     final isTurkish = localeCode == 'tr';
 
-    final question = widget.quizController.prepareNextQuestion(
+    var question = widget.quizController.prepareNextQuestion(
       localeCode: localeCode,
     );
 
     int? selectedIndex;
     bool answered = false;
+    int knowledgeReward = 0;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -77,6 +78,9 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage> {
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
+            final isCorrect =
+                answered && selectedIndex == question.correctIndex;
+
             return SafeArea(
               child: SingleChildScrollView(
                 padding: EdgeInsets.fromLTRB(
@@ -132,9 +136,13 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage> {
                             return;
                           }
 
+                          final selectedIsCorrect =
+                              index == question.correctIndex;
+
                           setSheetState(() {
                             selectedIndex = index;
                             answered = true;
+                            knowledgeReward = selectedIsCorrect ? 10 : 2;
                           });
 
                           await widget.quizController.recordAnswer(
@@ -148,8 +156,16 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage> {
                     if (answered) ...[
                       const SizedBox(height: 8),
 
+                      _KnowledgeRewardBanner(
+                        amount: knowledgeReward,
+                        isCorrect: isCorrect,
+                        isTurkish: isTurkish,
+                      ),
+
+                      const SizedBox(height: 12),
+
                       _QuizResultCard(
-                        isCorrect: selectedIndex == question.correctIndex,
+                        isCorrect: isCorrect,
                         explanation: question.explanation,
                         isTurkish: isTurkish,
                       ),
@@ -158,10 +174,29 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage> {
 
                       FilledButton.icon(
                         onPressed: () {
+                          setSheetState(() {
+                            question = widget.quizController
+                                .prepareNextQuestion(localeCode: localeCode);
+
+                            selectedIndex = null;
+                            answered = false;
+                            knowledgeReward = 0;
+                          });
+                        },
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: Text(
+                          isTurkish ? 'Bir soru daha' : 'Another question',
+                        ),
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      OutlinedButton.icon(
+                        onPressed: () {
                           Navigator.of(sheetContext).pop();
                         },
                         icon: const Icon(Icons.check_rounded),
-                        label: Text(isTurkish ? 'Tamam' : 'Done'),
+                        label: Text(isTurkish ? 'Bitir' : 'Finish'),
                       ),
                     ],
                   ],
@@ -752,6 +787,46 @@ class _Stat extends StatelessWidget {
   }
 }
 
+class _KnowledgeRewardBanner extends StatelessWidget {
+  const _KnowledgeRewardBanner({
+    required this.amount,
+    required this.isCorrect,
+    required this.isTurkish,
+  });
+
+  final int amount;
+  final bool isCorrect;
+  final bool isTurkish;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: colors.secondaryContainer,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.school_rounded),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              isTurkish ? '+$amount Bilgi' : '+$amount Knowledge',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+          ),
+          Text(isCorrect ? '✨' : '📚', style: const TextStyle(fontSize: 22)),
+        ],
+      ),
+    );
+  }
+}
+
 class _QuizOptionButton extends StatelessWidget {
   const _QuizOptionButton({
     required this.text,
@@ -803,9 +878,7 @@ class _QuizOptionButton extends StatelessWidget {
       child: Row(
         children: [
           Expanded(child: Text(text)),
-
           if (answered && isCorrect) const Icon(Icons.check_circle_rounded),
-
           if (answered && isSelected && !isCorrect)
             const Icon(Icons.cancel_rounded),
         ],
