@@ -9,6 +9,7 @@ import 'package:noname/features/quiz/presentation/widgets/quiz_achievements_card
 import 'package:noname/features/quiz/presentation/widgets/quiz_category_selector_card.dart';
 import 'package:noname/features/companion/application/companion_controller.dart';
 import 'package:noname/features/companion/presentation/widgets/companion_habitat_card.dart';
+import 'package:noname/features/companion/presentation/pages/companion_habitat_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -88,7 +89,27 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 const SizedBox(height: 28),
 
                 CompanionHabitatCard(controller: widget.companionController),
-                const SizedBox(height: 20),
+                const SizedBox(height: 12),
+
+                FilledButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) {
+                          return CompanionHabitatPage(
+                            controller: widget.companionController,
+                          );
+                        },
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.home_rounded),
+                  label: Text(
+                    Localizations.localeOf(context).languageCode == 'tr'
+                        ? 'Habitatı aç'
+                        : 'Open habitat',
+                  ),
+                ),
 
                 _PermissionCard(
                   isBusy: controller.isBusy,
