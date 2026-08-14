@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../quiz/application/quiz_controller.dart';
 import '../../application/companion_controller.dart';
 import '../../domain/entities/companion_state.dart';
 import '../widgets/companion_mascot.dart';
@@ -7,9 +8,14 @@ import '../widgets/companion_mascot.dart';
 enum _HabitatAction { none, feeding, playing, resting }
 
 class CompanionHabitatPage extends StatefulWidget {
-  const CompanionHabitatPage({required this.controller, super.key});
+  const CompanionHabitatPage({
+    required this.controller,
+    required this.quizController,
+    super.key,
+  });
 
   final CompanionController controller;
+  final QuizController quizController;
 
   @override
   State<CompanionHabitatPage> createState() => _CompanionHabitatPageState();
@@ -52,6 +58,122 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage> {
     }
   }
 
+  Future<void> _openLearningQuiz() async {
+    final localeCode = Localizations.localeOf(context).languageCode;
+
+    final isTurkish = localeCode == 'tr';
+
+    final question = widget.quizController.prepareNextQuestion(
+      localeCode: localeCode,
+    );
+
+    int? selectedIndex;
+    bool answered = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return SafeArea(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  8,
+                  20,
+                  20 + MediaQuery.viewInsetsOf(context).bottom,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.school_rounded, size: 28),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            isTurkish
+                                ? '${widget.controller.state.name} ile öğren'
+                                : 'Learn with ${widget.controller.state.name}',
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    Text(
+                      question.prompt,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    for (
+                      var index = 0;
+                      index < question.options.length;
+                      index++
+                    ) ...[
+                      _QuizOptionButton(
+                        text: question.options[index],
+                        index: index,
+                        selectedIndex: selectedIndex,
+                        correctIndex: question.correctIndex,
+                        answered: answered,
+                        onPressed: () async {
+                          if (answered) {
+                            return;
+                          }
+
+                          setSheetState(() {
+                            selectedIndex = index;
+                            answered = true;
+                          });
+
+                          await widget.quizController.recordAnswer(
+                            selectedIndex: index,
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+
+                    if (answered) ...[
+                      const SizedBox(height: 8),
+
+                      _QuizResultCard(
+                        isCorrect: selectedIndex == question.correctIndex,
+                        explanation: question.explanation,
+                        isTurkish: isTurkish,
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      FilledButton.icon(
+                        onPressed: () {
+                          Navigator.of(sheetContext).pop();
+                        },
+                        icon: const Icon(Icons.check_rounded),
+                        label: Text(isTurkish ? 'Tamam' : 'Done'),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -77,12 +199,12 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage> {
                     action: _action,
                     isTurkish: isTurkish,
                     onAction: _performAction,
+                    onLearn: _openLearningQuiz,
                   ),
                 ),
 
                 _GrowthProgress(state: state, isTurkish: isTurkish),
 
-                _StatsPanel(state: state, isTurkish: isTurkish),
                 _StatsPanel(state: state, isTurkish: isTurkish),
               ],
             ),
@@ -100,6 +222,7 @@ class _HabitatRoom extends StatelessWidget {
     required this.action,
     required this.isTurkish,
     required this.onAction,
+    required this.onLearn,
   });
 
   final CompanionController controller;
@@ -112,6 +235,8 @@ class _HabitatRoom extends StatelessWidget {
     Future<void> Function() operation,
   )
   onAction;
+
+  final Future<void> Function() onLearn;
 
   @override
   Widget build(BuildContext context) {
@@ -130,6 +255,21 @@ class _HabitatRoom extends StatelessWidget {
           ),
           child: Stack(
             children: [
+              Positioned(
+                top: 24,
+                left: 24,
+                child: FilledButton.tonalIcon(
+                  onPressed:
+                      action == _HabitatAction.none
+                          ? () async {
+                            await onLearn();
+                          }
+                          : null,
+                  icon: const Icon(Icons.school_rounded, size: 20),
+                  label: Text(isTurkish ? 'Öğren' : 'Learn'),
+                ),
+              ),
+
               Positioned(
                 top: 24,
                 right: 24,
@@ -172,8 +312,8 @@ class _HabitatRoom extends StatelessWidget {
                   icon: Icons.restaurant_rounded,
                   label: isTurkish ? 'Besle' : 'Feed',
                   enabled: action == _HabitatAction.none,
-                  onTap: () {
-                    onAction(_HabitatAction.feeding, controller.feed);
+                  onTap: () async {
+                    await onAction(_HabitatAction.feeding, controller.feed);
                   },
                 ),
               ),
@@ -187,8 +327,8 @@ class _HabitatRoom extends StatelessWidget {
                     icon: Icons.toys_rounded,
                     label: isTurkish ? 'Oyna' : 'Play',
                     enabled: action == _HabitatAction.none,
-                    onTap: () {
-                      onAction(_HabitatAction.playing, controller.play);
+                    onTap: () async {
+                      await onAction(_HabitatAction.playing, controller.play);
                     },
                   ),
                 ),
@@ -201,8 +341,8 @@ class _HabitatRoom extends StatelessWidget {
                   icon: Icons.bed_rounded,
                   label: isTurkish ? 'Uyu' : 'Sleep',
                   enabled: action == _HabitatAction.none,
-                  onTap: () {
-                    onAction(_HabitatAction.resting, controller.rest);
+                  onTap: () async {
+                    await onAction(_HabitatAction.resting, controller.rest);
                   },
                 ),
               ),
@@ -430,50 +570,6 @@ class _StageBadge extends StatelessWidget {
   }
 }
 
-class _StatsPanel extends StatelessWidget {
-  const _StatsPanel({required this.state, required this.isTurkish});
-
-  final CompanionState state;
-  final bool isTurkish;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      elevation: 8,
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              _Stat(
-                icon: Icons.restaurant_rounded,
-                value: state.satiety,
-                label: isTurkish ? 'Tokluk' : 'Food',
-              ),
-              _Stat(
-                icon: Icons.favorite_rounded,
-                value: state.happiness,
-                label: isTurkish ? 'Mutluluk' : 'Happy',
-              ),
-              _Stat(
-                icon: Icons.bolt_rounded,
-                value: state.energy,
-                label: isTurkish ? 'Enerji' : 'Energy',
-              ),
-              _Stat(
-                icon: Icons.school_rounded,
-                value: state.knowledge,
-                label: isTurkish ? 'Bilgi' : 'Knowledge',
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _GrowthProgress extends StatelessWidget {
   const _GrowthProgress({required this.state, required this.isTurkish});
 
@@ -585,6 +681,50 @@ class _GrowthProgress extends StatelessWidget {
   }
 }
 
+class _StatsPanel extends StatelessWidget {
+  const _StatsPanel({required this.state, required this.isTurkish});
+
+  final CompanionState state;
+  final bool isTurkish;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      elevation: 8,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              _Stat(
+                icon: Icons.restaurant_rounded,
+                value: state.satiety,
+                label: isTurkish ? 'Tokluk' : 'Food',
+              ),
+              _Stat(
+                icon: Icons.favorite_rounded,
+                value: state.happiness,
+                label: isTurkish ? 'Mutluluk' : 'Happy',
+              ),
+              _Stat(
+                icon: Icons.bolt_rounded,
+                value: state.energy,
+                label: isTurkish ? 'Enerji' : 'Energy',
+              ),
+              _Stat(
+                icon: Icons.school_rounded,
+                value: state.knowledge,
+                label: isTurkish ? 'Bilgi' : 'Knowledge',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _Stat extends StatelessWidget {
   const _Stat({required this.icon, required this.value, required this.label});
 
@@ -606,6 +746,122 @@ class _Stat extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.labelSmall,
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuizOptionButton extends StatelessWidget {
+  const _QuizOptionButton({
+    required this.text,
+    required this.index,
+    required this.selectedIndex,
+    required this.correctIndex,
+    required this.answered,
+    required this.onPressed,
+  });
+
+  final String text;
+  final int index;
+  final int? selectedIndex;
+  final int correctIndex;
+  final bool answered;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    final isSelected = selectedIndex == index;
+
+    final isCorrect = index == correctIndex;
+
+    Color? backgroundColor;
+    Color? foregroundColor;
+
+    if (answered) {
+      if (isCorrect) {
+        backgroundColor = colors.primaryContainer;
+        foregroundColor = colors.onPrimaryContainer;
+      } else if (isSelected) {
+        backgroundColor = colors.errorContainer;
+        foregroundColor = colors.onErrorContainer;
+      }
+    }
+
+    return FilledButton(
+      onPressed: answered ? null : onPressed,
+      style: FilledButton.styleFrom(
+        backgroundColor: backgroundColor,
+        foregroundColor: foregroundColor,
+        disabledBackgroundColor:
+            backgroundColor ?? colors.surfaceContainerHighest,
+        disabledForegroundColor: foregroundColor ?? colors.onSurfaceVariant,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: Text(text)),
+
+          if (answered && isCorrect) const Icon(Icons.check_circle_rounded),
+
+          if (answered && isSelected && !isCorrect)
+            const Icon(Icons.cancel_rounded),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuizResultCard extends StatelessWidget {
+  const _QuizResultCard({
+    required this.isCorrect,
+    required this.explanation,
+    required this.isTurkish,
+  });
+
+  final bool isCorrect;
+  final String explanation;
+  final bool isTurkish;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isCorrect ? colors.primaryContainer : colors.errorContainer,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isCorrect ? Icons.celebration_rounded : Icons.lightbulb_rounded,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  isCorrect
+                      ? (isTurkish ? 'Doğru! 🎉' : 'Correct! 🎉')
+                      : (isTurkish
+                          ? 'Bir şey öğrendik! 📚'
+                          : 'We learned something! 📚'),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 8),
+
+          Text(explanation),
         ],
       ),
     );

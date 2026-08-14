@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:noname/core/localization/locale_controller.dart';
+import 'package:noname/features/companion/application/companion_controller.dart';
+import 'package:noname/features/companion/presentation/pages/companion_habitat_page.dart';
+import 'package:noname/features/companion/presentation/widgets/companion_habitat_card.dart';
 import 'package:noname/features/mascot/application/mascot_controller.dart';
-import 'package:noname/l10n/generated/app_localizations.dart';
-import 'package:noname/features/quiz/application/quiz_controller.dart';
 import 'package:noname/features/mascot/application/mascot_quiz_coordinator.dart';
-import 'package:noname/features/quiz/presentation/widgets/quiz_progress_card.dart';
+import 'package:noname/features/quiz/application/quiz_controller.dart';
 import 'package:noname/features/quiz/presentation/widgets/quiz_achievements_card.dart';
 import 'package:noname/features/quiz/presentation/widgets/quiz_category_selector_card.dart';
-import 'package:noname/features/companion/application/companion_controller.dart';
-import 'package:noname/features/companion/presentation/widgets/companion_habitat_card.dart';
-import 'package:noname/features/companion/presentation/pages/companion_habitat_page.dart';
+import 'package:noname/features/quiz/presentation/widgets/quiz_progress_card.dart';
+import 'package:noname/l10n/generated/app_localizations.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -89,6 +89,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 const SizedBox(height: 28),
 
                 CompanionHabitatCard(controller: widget.companionController),
+
                 const SizedBox(height: 12),
 
                 FilledButton.icon(
@@ -98,6 +99,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         builder: (_) {
                           return CompanionHabitatPage(
                             controller: widget.companionController,
+                            quizController: widget.quizController,
                           );
                         },
                       ),
@@ -110,6 +112,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         : 'Open habitat',
                   ),
                 ),
+
+                const SizedBox(height: 20),
 
                 _PermissionCard(
                   isBusy: controller.isBusy,
@@ -180,15 +184,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     style: TextStyle(color: colors.error),
                   ),
                 ],
+
                 const SizedBox(height: 32),
 
                 QuizCategorySelectorCard(controller: widget.quizController),
+
                 const SizedBox(height: 16),
 
                 QuizProgressCard(controller: widget.quizController),
+
                 const SizedBox(height: 16),
 
                 QuizAchievementsCard(controller: widget.quizController),
+
                 const SizedBox(height: 32),
 
                 Text(
