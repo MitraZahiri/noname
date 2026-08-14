@@ -1,4 +1,4 @@
-﻿import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart';
 
 import '../domain/entities/companion_state.dart';
 import '../domain/repositories/companion_repository.dart';
@@ -8,8 +8,7 @@ class CompanionController extends ChangeNotifier {
     required CompanionRepository repository,
     CompanionState? initialState,
   }) : _repository = repository,
-       _state =
-           initialState ?? CompanionState.initial();
+       _state = initialState ?? CompanionState.initial();
 
   final CompanionRepository _repository;
 
@@ -25,13 +24,9 @@ class CompanionController extends ChangeNotifier {
     }
 
     try {
-      final storedState =
-          await _repository.load();
+      final storedState = await _repository.load();
 
-      _state =
-          (storedState ?? _state).applyTimeDecay(
-            now: DateTime.now(),
-          );
+      _state = (storedState ?? _state).applyTimeDecay(now: DateTime.now());
     } catch (error, stackTrace) {
       debugPrint(
         'Companion state could not be loaded: '
@@ -46,38 +41,23 @@ class CompanionController extends ChangeNotifier {
   }
 
   Future<void> feed() async {
-    await _applyState(
-      _state.feed(),
-    );
+    await _applyState(_state.feed());
   }
 
   Future<void> play() async {
-    await _applyState(
-      _state.play(),
-    );
+    await _applyState(_state.play());
   }
 
   Future<void> rest() async {
-    await _applyState(
-      _state.rest(),
-    );
+    await _applyState(_state.rest());
   }
 
-  Future<void> recordQuizAnswer({
-    required bool isCorrect,
-  }) async {
-    await _applyState(
-      _state.recordQuizAnswer(
-        isCorrect: isCorrect,
-      ),
-    );
+  Future<void> recordQuizAnswer({required bool isCorrect}) async {
+    await _applyState(_state.recordQuizAnswer(isCorrect: isCorrect));
   }
 
   Future<void> refreshForElapsedTime() async {
-    final updatedState =
-        _state.applyTimeDecay(
-          now: DateTime.now(),
-        );
+    final updatedState = _state.applyTimeDecay(now: DateTime.now());
 
     if (identical(updatedState, _state)) {
       return;
@@ -100,9 +80,7 @@ class CompanionController extends ChangeNotifier {
     }
   }
 
-  Future<void> _applyState(
-    CompanionState nextState,
-  ) async {
+  Future<void> _applyState(CompanionState nextState) async {
     _state = nextState;
     notifyListeners();
 
