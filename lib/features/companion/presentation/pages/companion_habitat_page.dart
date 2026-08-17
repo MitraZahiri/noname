@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../quiz/application/quiz_controller.dart';
@@ -5,6 +7,7 @@ import '../../application/companion_controller.dart';
 import '../../application/daily_goals_controller.dart';
 import '../../domain/entities/companion_state.dart';
 import '../widgets/companion_mascot.dart';
+import '../widgets/habitat_shop_sheet.dart';
 
 enum _HabitatAction { none, feeding, playing, resting }
 
@@ -22,7 +25,8 @@ class CompanionHabitatPage extends StatefulWidget {
   State<CompanionHabitatPage> createState() => _CompanionHabitatPageState();
 }
 
-class _CompanionHabitatPageState extends State<CompanionHabitatPage> {
+class _CompanionHabitatPageState extends State<CompanionHabitatPage>
+    with WidgetsBindingObserver {
   _HabitatAction _action = _HabitatAction.none;
 
   late final DailyGoalsController _dailyGoalsController;
@@ -31,18 +35,46 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage> {
   void initState() {
     super.initState();
 
+    WidgetsBinding.instance.addObserver(this);
+
     _dailyGoalsController = DailyGoalsController();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await widget.controller.refreshForElapsedTime();
+
+      if (!mounted) {
+        return;
+      }
 
       await _dailyGoalsController.initialize();
     });
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshAfterResume());
+    }
+  }
+
+  Future<void> _refreshAfterResume() async {
+    await widget.controller.refreshForElapsedTime();
+
+    if (!mounted) {
+      return;
+    }
+
+    await _dailyGoalsController.refreshForToday();
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+
     _dailyGoalsController.dispose();
+
     super.dispose();
   }
 
@@ -64,9 +96,11 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage> {
       switch (action) {
         case _HabitatAction.feeding:
           await _dailyGoalsController.complete(DailyGoalType.feed);
+          break;
 
         case _HabitatAction.playing:
           await _dailyGoalsController.complete(DailyGoalType.play);
+          break;
 
         case _HabitatAction.resting:
         case _HabitatAction.none:
@@ -121,12 +155,15 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage> {
                     Row(
                       children: [
                         const Icon(Icons.school_rounded, size: 28),
+
                         const SizedBox(width: 10),
+
                         Expanded(
                           child: Text(
                             isTurkish
                                 ? '${widget.controller.state.name} ile öğren'
-                                : 'Learn with ${widget.controller.state.name}',
+                                : 'Learn with '
+                                    '${widget.controller.state.name}',
                             style: Theme.of(context).textTheme.titleLarge
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
@@ -181,6 +218,7 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage> {
                           );
                         },
                       ),
+
                       const SizedBox(height: 10),
                     ],
 
@@ -242,6 +280,24 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage> {
     );
   }
 
+  Future<void> _openHabitatShop() async {
+    if (!_dailyGoalsController.isInitialized) {
+      await _dailyGoalsController.initialize();
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    final isTurkish = Localizations.localeOf(context).languageCode == 'tr';
+
+    await showHabitatShopSheet(
+      context: context,
+      controller: _dailyGoalsController,
+      isTurkish: isTurkish,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -262,6 +318,16 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage> {
                       ? '${state.name} Habitatı'
                       : '${state.name}\'s Habitat',
                 ),
+                actions: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: TextButton.icon(
+                      onPressed: _openHabitatShop,
+                      icon: const Icon(Icons.storefront_rounded),
+                      label: Text('🪙 ${_dailyGoalsController.coins}'),
+                    ),
+                  ),
+                ],
               ),
               body: SafeArea(
                 child: Column(
@@ -269,6 +335,7 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage> {
                     Expanded(
                       child: _HabitatRoom(
                         controller: widget.controller,
+                        rewardsController: _dailyGoalsController,
                         state: state,
                         action: _action,
                         isTurkish: isTurkish,
@@ -300,6 +367,7 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage> {
 class _HabitatRoom extends StatelessWidget {
   const _HabitatRoom({
     required this.controller,
+    required this.rewardsController,
     required this.state,
     required this.action,
     required this.isTurkish,
@@ -308,8 +376,13 @@ class _HabitatRoom extends StatelessWidget {
   });
 
   final CompanionController controller;
+
+  final DailyGoalsController rewardsController;
+
   final CompanionState state;
+
   final _HabitatAction action;
+
   final bool isTurkish;
 
   final Future<void> Function(
@@ -379,6 +452,10 @@ class _HabitatRoom extends StatelessWidget {
                 child: ColoredBox(color: colors.surfaceContainerHighest),
               ),
 
+              Positioned.fill(
+                child: _PlacedHabitatDecorations(controller: rewardsController),
+              ),
+
               Center(
                 child: _CompanionCharacter(
                   state: state,
@@ -436,6 +513,49 @@ class _HabitatRoom extends StatelessWidget {
   }
 }
 
+class _PlacedHabitatDecorations extends StatelessWidget {
+  const _PlacedHabitatDecorations({required this.controller});
+
+  final DailyGoalsController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Stack(
+        children: [
+          if (controller.isPlaced(HabitatShopItem.plant))
+            const Positioned(
+              left: 24,
+              bottom: 92,
+              child: Text('🪴', style: TextStyle(fontSize: 52)),
+            ),
+
+          if (controller.isPlaced(HabitatShopItem.teddy))
+            const Positioned(
+              right: 28,
+              bottom: 88,
+              child: Text('🧸', style: TextStyle(fontSize: 48)),
+            ),
+
+          if (controller.isPlaced(HabitatShopItem.lamp))
+            const Positioned(
+              left: 30,
+              top: 150,
+              child: Text('💡', style: TextStyle(fontSize: 42)),
+            ),
+
+          if (controller.isPlaced(HabitatShopItem.bookshelf))
+            const Positioned(
+              right: 24,
+              top: 150,
+              child: Text('📚', style: TextStyle(fontSize: 48)),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _DailyGoalsCard extends StatelessWidget {
   const _DailyGoalsCard({
     required this.controller,
@@ -444,7 +564,6 @@ class _DailyGoalsCard extends StatelessWidget {
   });
 
   final DailyGoalsController controller;
-
   final String companionName;
   final bool isTurkish;
 
@@ -483,18 +602,16 @@ class _DailyGoalsCard extends StatelessWidget {
                   ),
                 ),
 
-                Text(
-                  '${controller.completedCount}'
-                  ' / '
-                  '${controller.totalGoals}',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
-                ),
+                _CoinBadge(coins: controller.coins),
+
+                const SizedBox(width: 8),
+
+                if (controller.streak > 0)
+                  _StreakBadge(streak: controller.streak),
               ],
             ),
 
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
 
             if (!controller.isInitialized)
               const LinearProgressIndicator()
@@ -523,7 +640,7 @@ class _DailyGoalsCard extends StatelessWidget {
                         : 'Play with $companionName',
               ),
 
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
 
               ClipRRect(
                 borderRadius: BorderRadius.circular(20),
@@ -532,9 +649,134 @@ class _DailyGoalsCard extends StatelessWidget {
                   minHeight: 7,
                 ),
               ),
+
+              const SizedBox(height: 8),
+
+              if (controller.allCompleted && controller.rewardEarnedToday)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 9,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colors.tertiaryContainer,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      const Text('🪙', style: TextStyle(fontSize: 20)),
+
+                      const SizedBox(width: 8),
+
+                      Expanded(
+                        child: Text(
+                          isTurkish
+                              ? '+${DailyGoalsController.dailyCompletionReward} coin kazandın!'
+                              : '+${DailyGoalsController.dailyCompletionReward} coins earned!',
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Text(
+                  isTurkish
+                      ? 'Tüm görevleri tamamla ve '
+                          '${DailyGoalsController.dailyCompletionReward} 🪙 kazan.'
+                      : 'Complete all goals and earn '
+                          '${DailyGoalsController.dailyCompletionReward} 🪙.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+
+              if (controller.allCompleted && controller.streak > 0) ...[
+                const SizedBox(height: 7),
+
+                Text(
+                  isTurkish
+                      ? '🔥 ${controller.streak} günlük seri! Yarın da devam et.'
+                      : '🔥 ${controller.streak} day streak! Come back tomorrow.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colors.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _CoinBadge extends StatelessWidget {
+  const _CoinBadge({required this.coins});
+
+  final int coins;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: colors.secondaryContainer,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('🪙', style: TextStyle(fontSize: 15)),
+
+          const SizedBox(width: 4),
+
+          Text(
+            '$coins',
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StreakBadge extends StatelessWidget {
+  const _StreakBadge({required this.streak});
+
+  final int streak;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: colors.tertiaryContainer,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('🔥', style: TextStyle(fontSize: 15)),
+
+          const SizedBox(width: 4),
+
+          Text(
+            '$streak',
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
+          ),
+        ],
       ),
     );
   }
@@ -665,7 +907,6 @@ class _CompanionCharacter extends StatelessWidget {
 
   final CompanionState state;
   final _HabitatAction action;
-
   final Future<void> Function() onPet;
 
   @override
@@ -684,8 +925,11 @@ class _CompanionCharacter extends StatelessWidget {
 
     final pose = switch (action) {
       _HabitatAction.feeding => CompanionMascotPose.feeding,
+
       _HabitatAction.playing => CompanionMascotPose.playing,
+
       _HabitatAction.resting => CompanionMascotPose.resting,
+
       _HabitatAction.none => CompanionMascotPose.idle,
     };
 
@@ -775,7 +1019,9 @@ class _RoomAction extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon, size: 38),
+
               const SizedBox(height: 4),
+
               Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
             ],
           ),
@@ -854,7 +1100,8 @@ class _GrowthProgress extends StatelessWidget {
                 Text(
                   nextStage == null
                       ? currentStage
-                      : '$currentStage → $nextStage',
+                      : '$currentStage → '
+                          '$nextStage',
                   style: Theme.of(
                     context,
                   ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
@@ -949,16 +1196,19 @@ class _StatsPanel extends StatelessWidget {
                 value: state.satiety,
                 label: isTurkish ? 'Tokluk' : 'Food',
               ),
+
               _Stat(
                 icon: Icons.favorite_rounded,
                 value: state.happiness,
                 label: isTurkish ? 'Mutluluk' : 'Happy',
               ),
+
               _Stat(
                 icon: Icons.bolt_rounded,
                 value: state.energy,
                 label: isTurkish ? 'Enerji' : 'Energy',
               ),
+
               _Stat(
                 icon: Icons.school_rounded,
                 value: state.knowledge,

@@ -3,9 +3,26 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 enum DailyGoalType { quiz, feed, play }
 
+enum HabitatShopItem { plant, teddy, lamp, bookshelf }
+
+enum HabitatPurchaseResult {
+  purchased,
+  alreadyOwned,
+  insufficientCoins,
+  saveFailed,
+}
+
+enum HabitatPlacementResult { placed, removed, notOwned, saveFailed }
+
 class DailyGoalsController extends ChangeNotifier {
   DailyGoalsController({SharedPreferencesAsync? preferences})
     : _preferences = preferences ?? SharedPreferencesAsync();
+
+  static const int dailyCompletionReward = 25;
+
+  // ---------------------------------------------------------------------------
+  // Daily goals
+  // ---------------------------------------------------------------------------
 
   static const String _dateKey = 'companion_daily_goals_date';
 
@@ -15,14 +32,62 @@ class DailyGoalsController extends ChangeNotifier {
 
   static const String _playKey = 'companion_daily_goal_play';
 
+  static const String _streakKey = 'companion_daily_goal_streak';
+
+  static const String _lastCompletedDateKey =
+      'companion_daily_goal_last_completed_date';
+
+  static const String _coinsKey = 'companion_coins';
+
+  static const String _lastRewardedDateKey =
+      'companion_daily_goal_last_rewarded_date';
+
+  // ---------------------------------------------------------------------------
+  // Habitat ownership
+  // ---------------------------------------------------------------------------
+
+  static const String _plantOwnedKey = 'companion_shop_plant_owned';
+
+  static const String _teddyOwnedKey = 'companion_shop_teddy_owned';
+
+  static const String _lampOwnedKey = 'companion_shop_lamp_owned';
+
+  static const String _bookshelfOwnedKey = 'companion_shop_bookshelf_owned';
+
+  // ---------------------------------------------------------------------------
+  // Habitat placement
+  // ---------------------------------------------------------------------------
+
+  static const String _plantPlacedKey = 'companion_shop_plant_placed';
+
+  static const String _teddyPlacedKey = 'companion_shop_teddy_placed';
+
+  static const String _lampPlacedKey = 'companion_shop_lamp_placed';
+
+  static const String _bookshelfPlacedKey = 'companion_shop_bookshelf_placed';
+
   final SharedPreferencesAsync _preferences;
 
   bool _quizCompleted = false;
   bool _feedCompleted = false;
   bool _playCompleted = false;
 
+  int _streak = 0;
+  int _coins = 0;
+
+  String? _lastCompletedDate;
+  String? _lastRewardedDate;
+
+  final Set<HabitatShopItem> _ownedItems = <HabitatShopItem>{};
+
+  final Set<HabitatShopItem> _placedItems = <HabitatShopItem>{};
+
   bool _isInitialized = false;
   bool _isDisposed = false;
+
+  // ---------------------------------------------------------------------------
+  // Getters
+  // ---------------------------------------------------------------------------
 
   bool get isInitialized => _isInitialized;
 
@@ -31,6 +96,10 @@ class DailyGoalsController extends ChangeNotifier {
   bool get feedCompleted => _feedCompleted;
 
   bool get playCompleted => _playCompleted;
+
+  int get streak => _streak;
+
+  int get coins => _coins;
 
   int get completedCount {
     var count = 0;
@@ -60,6 +129,47 @@ class DailyGoalsController extends ChangeNotifier {
     return completedCount == totalGoals;
   }
 
+  bool get rewardEarnedToday {
+    return _lastRewardedDate == _dateValue(DateTime.now());
+  }
+
+  int get ownedItemCount {
+    return _ownedItems.length;
+  }
+
+  int get placedItemCount {
+    return _placedItems.length;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Habitat helpers
+  // ---------------------------------------------------------------------------
+
+  bool isOwned(HabitatShopItem item) {
+    return _ownedItems.contains(item);
+  }
+
+  bool isPlaced(HabitatShopItem item) {
+    return _placedItems.contains(item);
+  }
+
+  bool canAfford(HabitatShopItem item) {
+    return _coins >= priceFor(item);
+  }
+
+  int priceFor(HabitatShopItem item) {
+    return switch (item) {
+      HabitatShopItem.plant => 20,
+      HabitatShopItem.teddy => 35,
+      HabitatShopItem.lamp => 50,
+      HabitatShopItem.bookshelf => 75,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Initialization
+  // ---------------------------------------------------------------------------
+
   Future<void> initialize() async {
     if (_isInitialized) {
       return;
@@ -71,19 +181,45 @@ class DailyGoalsController extends ChangeNotifier {
     try {
       final storedDate = await _preferences.getString(_dateKey);
 
-      if (storedDate != today) {
-        _quizCompleted = false;
-        _feedCompleted = false;
-        _playCompleted = false;
+      _streak = await _preferences.getInt(_streakKey) ?? 0;
 
-        await _persist(date: today);
-      } else {
+      if (_streak < 0) {
+        _streak = 0;
+      }
+
+      _coins = await _preferences.getInt(_coinsKey) ?? 0;
+
+      if (_coins < 0) {
+        _coins = 0;
+      }
+
+      _lastCompletedDate = await _preferences.getString(_lastCompletedDateKey);
+
+      _lastRewardedDate = await _preferences.getString(_lastRewardedDateKey);
+
+      await _loadOwnedItems();
+
+      await _loadPlacedItems();
+
+      if (storedDate == today) {
         _quizCompleted = await _preferences.getBool(_quizKey) ?? false;
 
         _feedCompleted = await _preferences.getBool(_feedKey) ?? false;
 
         _playCompleted = await _preferences.getBool(_playKey) ?? false;
+
+        if (allCompleted) {
+          _updateStreakIfNeeded(now: now);
+
+          _grantDailyRewardIfNeeded(now: now);
+        }
+      } else {
+        _quizCompleted = false;
+        _feedCompleted = false;
+        _playCompleted = false;
       }
+
+      await _persist(date: today);
     } catch (error, stackTrace) {
       debugPrint(
         'Failed to load daily goals: '
@@ -92,14 +228,28 @@ class DailyGoalsController extends ChangeNotifier {
     }
 
     _isInitialized = true;
+
     _safeNotifyListeners();
   }
 
   Future<void> refreshForToday() async {
+    if (!_isInitialized) {
+      await initialize();
+      return;
+    }
+
     await _ensureCurrentDay();
   }
 
+  // ---------------------------------------------------------------------------
+  // Daily goals
+  // ---------------------------------------------------------------------------
+
   Future<void> complete(DailyGoalType goal) async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+
     await _ensureCurrentDay();
 
     var changed = false;
@@ -110,28 +260,40 @@ class DailyGoalsController extends ChangeNotifier {
           _quizCompleted = true;
           changed = true;
         }
+        break;
 
       case DailyGoalType.feed:
         if (!_feedCompleted) {
           _feedCompleted = true;
           changed = true;
         }
+        break;
 
       case DailyGoalType.play:
         if (!_playCompleted) {
           _playCompleted = true;
           changed = true;
         }
+        break;
     }
 
     if (!changed) {
       return;
     }
 
+    final now = DateTime.now();
+    final today = _dateValue(now);
+
+    if (allCompleted) {
+      _updateStreakIfNeeded(now: now);
+
+      _grantDailyRewardIfNeeded(now: now);
+    }
+
     _safeNotifyListeners();
 
     try {
-      await _persist(date: _dateValue(DateTime.now()));
+      await _persist(date: today);
     } catch (error, stackTrace) {
       debugPrint(
         'Failed to save daily goals: '
@@ -140,8 +302,185 @@ class DailyGoalsController extends ChangeNotifier {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Habitat shop
+  // ---------------------------------------------------------------------------
+
+  Future<HabitatPurchaseResult> purchase(HabitatShopItem item) async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+
+    await _ensureCurrentDay();
+
+    if (isOwned(item)) {
+      return HabitatPurchaseResult.alreadyOwned;
+    }
+
+    final price = priceFor(item);
+
+    if (_coins < price) {
+      return HabitatPurchaseResult.insufficientCoins;
+    }
+
+    _coins -= price;
+
+    _ownedItems.add(item);
+
+    // Yeni satın alınan eşya otomatik olarak habitatta gösterilir.
+    _placedItems.add(item);
+
+    _safeNotifyListeners();
+
+    try {
+      await _persist(date: _dateValue(DateTime.now()));
+
+      return HabitatPurchaseResult.purchased;
+    } catch (error, stackTrace) {
+      debugPrint(
+        'Failed to purchase habitat item: '
+        '$error\n$stackTrace',
+      );
+
+      // Satın alma başarısızsa local state geri alınır.
+      _coins += price;
+
+      _ownedItems.remove(item);
+
+      _placedItems.remove(item);
+
+      _safeNotifyListeners();
+
+      return HabitatPurchaseResult.saveFailed;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Habitat placement
+  // ---------------------------------------------------------------------------
+
+  Future<HabitatPlacementResult> togglePlacement(HabitatShopItem item) async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+
+    await _ensureCurrentDay();
+
+    if (!isOwned(item)) {
+      return HabitatPlacementResult.notOwned;
+    }
+
+    final wasPlaced = isPlaced(item);
+
+    if (wasPlaced) {
+      _placedItems.remove(item);
+    } else {
+      _placedItems.add(item);
+    }
+
+    _safeNotifyListeners();
+
+    try {
+      await _persist(date: _dateValue(DateTime.now()));
+
+      if (wasPlaced) {
+        return HabitatPlacementResult.removed;
+      }
+
+      return HabitatPlacementResult.placed;
+    } catch (error, stackTrace) {
+      debugPrint(
+        'Failed to update habitat item placement: '
+        '$error\n$stackTrace',
+      );
+
+      // Persist başarısızsa local değişikliği geri al.
+      if (wasPlaced) {
+        _placedItems.add(item);
+      } else {
+        _placedItems.remove(item);
+      }
+
+      _safeNotifyListeners();
+
+      return HabitatPlacementResult.saveFailed;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Load owned items
+  // ---------------------------------------------------------------------------
+
+  Future<void> _loadOwnedItems() async {
+    _ownedItems.clear();
+
+    final plantOwned = await _preferences.getBool(_plantOwnedKey) ?? false;
+
+    final teddyOwned = await _preferences.getBool(_teddyOwnedKey) ?? false;
+
+    final lampOwned = await _preferences.getBool(_lampOwnedKey) ?? false;
+
+    final bookshelfOwned =
+        await _preferences.getBool(_bookshelfOwnedKey) ?? false;
+
+    if (plantOwned) {
+      _ownedItems.add(HabitatShopItem.plant);
+    }
+
+    if (teddyOwned) {
+      _ownedItems.add(HabitatShopItem.teddy);
+    }
+
+    if (lampOwned) {
+      _ownedItems.add(HabitatShopItem.lamp);
+    }
+
+    if (bookshelfOwned) {
+      _ownedItems.add(HabitatShopItem.bookshelf);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Load placed items
+  // ---------------------------------------------------------------------------
+
+  Future<void> _loadPlacedItems() async {
+    _placedItems.clear();
+
+    final plantPlaced = await _preferences.getBool(_plantPlacedKey);
+
+    final teddyPlaced = await _preferences.getBool(_teddyPlacedKey);
+
+    final lampPlaced = await _preferences.getBool(_lampPlacedKey);
+
+    final bookshelfPlaced = await _preferences.getBool(_bookshelfPlacedKey);
+
+    // Eski sürümden gelen satın alımlar için placed kaydı yoksa
+    // satın alınmış eşyayı varsayılan olarak yerleştirilmiş kabul ediyoruz.
+    if (isOwned(HabitatShopItem.plant) && (plantPlaced ?? true)) {
+      _placedItems.add(HabitatShopItem.plant);
+    }
+
+    if (isOwned(HabitatShopItem.teddy) && (teddyPlaced ?? true)) {
+      _placedItems.add(HabitatShopItem.teddy);
+    }
+
+    if (isOwned(HabitatShopItem.lamp) && (lampPlaced ?? true)) {
+      _placedItems.add(HabitatShopItem.lamp);
+    }
+
+    if (isOwned(HabitatShopItem.bookshelf) && (bookshelfPlaced ?? true)) {
+      _placedItems.add(HabitatShopItem.bookshelf);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Day reset
+  // ---------------------------------------------------------------------------
+
   Future<void> _ensureCurrentDay() async {
-    final today = _dateValue(DateTime.now());
+    final now = DateTime.now();
+    final today = _dateValue(now);
 
     String? storedDate;
 
@@ -176,14 +515,115 @@ class DailyGoalsController extends ChangeNotifier {
     }
   }
 
-  Future<void> _persist({required String date}) async {
-    await Future.wait<void>([
-      _preferences.setString(_dateKey, date),
-      _preferences.setBool(_quizKey, _quizCompleted),
-      _preferences.setBool(_feedKey, _feedCompleted),
-      _preferences.setBool(_playKey, _playCompleted),
-    ]);
+  // ---------------------------------------------------------------------------
+  // Streak
+  // ---------------------------------------------------------------------------
+
+  void _updateStreakIfNeeded({required DateTime now}) {
+    final today = _dateValue(now);
+
+    if (_lastCompletedDate == today) {
+      return;
+    }
+
+    final currentDay = DateTime(now.year, now.month, now.day);
+
+    final yesterday = _dateValue(currentDay.subtract(const Duration(days: 1)));
+
+    if (_lastCompletedDate == yesterday) {
+      _streak++;
+    } else {
+      _streak = 1;
+    }
+
+    _lastCompletedDate = today;
   }
+
+  // ---------------------------------------------------------------------------
+  // Daily reward
+  // ---------------------------------------------------------------------------
+
+  void _grantDailyRewardIfNeeded({required DateTime now}) {
+    final today = _dateValue(now);
+
+    if (_lastRewardedDate == today) {
+      return;
+    }
+
+    _coins += dailyCompletionReward;
+
+    _lastRewardedDate = today;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Persistence
+  // ---------------------------------------------------------------------------
+
+  Future<void> _persist({required String date}) async {
+    final operations = <Future<void>>[
+      _preferences.setString(_dateKey, date),
+
+      _preferences.setBool(_quizKey, _quizCompleted),
+
+      _preferences.setBool(_feedKey, _feedCompleted),
+
+      _preferences.setBool(_playKey, _playCompleted),
+
+      _preferences.setInt(_streakKey, _streak),
+
+      _preferences.setInt(_coinsKey, _coins),
+
+      // Owned items
+      _preferences.setBool(_plantOwnedKey, isOwned(HabitatShopItem.plant)),
+
+      _preferences.setBool(_teddyOwnedKey, isOwned(HabitatShopItem.teddy)),
+
+      _preferences.setBool(_lampOwnedKey, isOwned(HabitatShopItem.lamp)),
+
+      _preferences.setBool(
+        _bookshelfOwnedKey,
+        isOwned(HabitatShopItem.bookshelf),
+      ),
+
+      // Placed items
+      _preferences.setBool(_plantPlacedKey, isPlaced(HabitatShopItem.plant)),
+
+      _preferences.setBool(_teddyPlacedKey, isPlaced(HabitatShopItem.teddy)),
+
+      _preferences.setBool(_lampPlacedKey, isPlaced(HabitatShopItem.lamp)),
+
+      _preferences.setBool(
+        _bookshelfPlacedKey,
+        isPlaced(HabitatShopItem.bookshelf),
+      ),
+    ];
+
+    final lastCompletedDate = _lastCompletedDate;
+
+    if (lastCompletedDate == null) {
+      operations.add(_preferences.remove(_lastCompletedDateKey));
+    } else {
+      operations.add(
+        _preferences.setString(_lastCompletedDateKey, lastCompletedDate),
+      );
+    }
+
+    final lastRewardedDate = _lastRewardedDate;
+
+    if (lastRewardedDate == null) {
+      operations.add(_preferences.remove(_lastRewardedDateKey));
+    } else {
+      operations.add(
+        _preferences.setString(_lastRewardedDateKey, lastRewardedDate),
+      );
+    }
+
+    await Future.wait<void>(operations);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
 
   String _dateValue(DateTime date) {
     final month = date.month.toString().padLeft(2, '0');
@@ -199,9 +639,14 @@ class DailyGoalsController extends ChangeNotifier {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Dispose
+  // ---------------------------------------------------------------------------
+
   @override
   void dispose() {
     _isDisposed = true;
+
     super.dispose();
   }
 }
