@@ -444,7 +444,6 @@ class _DailyGoalsCard extends StatelessWidget {
   });
 
   final DailyGoalsController controller;
-
   final String companionName;
   final bool isTurkish;
 
@@ -482,6 +481,33 @@ class _DailyGoalsCard extends StatelessWidget {
                     ),
                   ),
                 ),
+
+                if (controller.streak > 0) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colors.tertiaryContainer,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('🔥', style: TextStyle(fontSize: 15)),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${controller.streak}',
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(width: 10),
+                ],
 
                 Text(
                   '${controller.completedCount}'
@@ -532,6 +558,20 @@ class _DailyGoalsCard extends StatelessWidget {
                   minHeight: 7,
                 ),
               ),
+
+              if (controller.allCompleted) ...[
+                const SizedBox(height: 8),
+
+                Text(
+                  isTurkish
+                      ? '🔥 ${controller.streak} günlük seri! Yarın da görevleri tamamlayarak seriyi koru.'
+                      : '🔥 ${controller.streak} day streak! Complete tomorrow\'s goals to keep it going.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colors.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ],
           ],
         ),

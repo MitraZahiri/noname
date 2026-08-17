@@ -15,11 +15,19 @@ class DailyGoalsController extends ChangeNotifier {
 
   static const String _playKey = 'companion_daily_goal_play';
 
+  static const String _streakKey = 'companion_daily_goal_streak';
+
+  static const String _lastCompletedDateKey =
+      'companion_daily_goal_last_completed_date';
+
   final SharedPreferencesAsync _preferences;
 
   bool _quizCompleted = false;
   bool _feedCompleted = false;
   bool _playCompleted = false;
+
+  int _streak = 0;
+  String? _lastCompletedDate;
 
   bool _isInitialized = false;
   bool _isDisposed = false;
@@ -31,6 +39,8 @@ class DailyGoalsController extends ChangeNotifier {
   bool get feedCompleted => _feedCompleted;
 
   bool get playCompleted => _playCompleted;
+
+  int get streak => _streak;
 
   int get completedCount {
     var count = 0;
@@ -71,19 +81,31 @@ class DailyGoalsController extends ChangeNotifier {
     try {
       final storedDate = await _preferences.getString(_dateKey);
 
-      if (storedDate != today) {
-        _quizCompleted = false;
-        _feedCompleted = false;
-        _playCompleted = false;
+      _streak = await _preferences.getInt(_streakKey) ?? 0;
 
-        await _persist(date: today);
-      } else {
+      if (_streak < 0) {
+        _streak = 0;
+      }
+
+      _lastCompletedDate = await _preferences.getString(_lastCompletedDateKey);
+
+      if (storedDate == today) {
         _quizCompleted = await _preferences.getBool(_quizKey) ?? false;
 
         _feedCompleted = await _preferences.getBool(_feedKey) ?? false;
 
         _playCompleted = await _preferences.getBool(_playKey) ?? false;
+
+        if (allCompleted) {
+          _updateStreakIfNeeded(now: now);
+        }
+      } else {
+        _quizCompleted = false;
+        _feedCompleted = false;
+        _playCompleted = false;
       }
+
+      await _persist(date: today);
     } catch (error, stackTrace) {
       debugPrint(
         'Failed to load daily goals: '
@@ -96,10 +118,19 @@ class DailyGoalsController extends ChangeNotifier {
   }
 
   Future<void> refreshForToday() async {
+    if (!_isInitialized) {
+      await initialize();
+      return;
+    }
+
     await _ensureCurrentDay();
   }
 
   Future<void> complete(DailyGoalType goal) async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+
     await _ensureCurrentDay();
 
     var changed = false;
@@ -110,28 +141,38 @@ class DailyGoalsController extends ChangeNotifier {
           _quizCompleted = true;
           changed = true;
         }
+        break;
 
       case DailyGoalType.feed:
         if (!_feedCompleted) {
           _feedCompleted = true;
           changed = true;
         }
+        break;
 
       case DailyGoalType.play:
         if (!_playCompleted) {
           _playCompleted = true;
           changed = true;
         }
+        break;
     }
 
     if (!changed) {
       return;
     }
 
+    final now = DateTime.now();
+    final today = _dateValue(now);
+
+    if (allCompleted) {
+      _updateStreakIfNeeded(now: now);
+    }
+
     _safeNotifyListeners();
 
     try {
-      await _persist(date: _dateValue(DateTime.now()));
+      await _persist(date: today);
     } catch (error, stackTrace) {
       debugPrint(
         'Failed to save daily goals: '
@@ -141,7 +182,8 @@ class DailyGoalsController extends ChangeNotifier {
   }
 
   Future<void> _ensureCurrentDay() async {
-    final today = _dateValue(DateTime.now());
+    final now = DateTime.now();
+    final today = _dateValue(now);
 
     String? storedDate;
 
@@ -176,13 +218,46 @@ class DailyGoalsController extends ChangeNotifier {
     }
   }
 
+  void _updateStreakIfNeeded({required DateTime now}) {
+    final today = _dateValue(now);
+
+    if (_lastCompletedDate == today) {
+      return;
+    }
+
+    final currentDay = DateTime(now.year, now.month, now.day);
+
+    final yesterday = _dateValue(currentDay.subtract(const Duration(days: 1)));
+
+    if (_lastCompletedDate == yesterday) {
+      _streak++;
+    } else {
+      _streak = 1;
+    }
+
+    _lastCompletedDate = today;
+  }
+
   Future<void> _persist({required String date}) async {
-    await Future.wait<void>([
+    final operations = <Future<void>>[
       _preferences.setString(_dateKey, date),
       _preferences.setBool(_quizKey, _quizCompleted),
       _preferences.setBool(_feedKey, _feedCompleted),
       _preferences.setBool(_playKey, _playCompleted),
-    ]);
+      _preferences.setInt(_streakKey, _streak),
+    ];
+
+    final lastCompletedDate = _lastCompletedDate;
+
+    if (lastCompletedDate == null) {
+      operations.add(_preferences.remove(_lastCompletedDateKey));
+    } else {
+      operations.add(
+        _preferences.setString(_lastCompletedDateKey, lastCompletedDate),
+      );
+    }
+
+    await Future.wait<void>(operations);
   }
 
   String _dateValue(DateTime date) {
