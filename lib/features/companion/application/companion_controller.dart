@@ -4,40 +4,49 @@ import '../domain/entities/companion_state.dart';
 import '../domain/repositories/companion_repository.dart';
 
 class CompanionController extends ChangeNotifier {
-  CompanionController({
-    required CompanionRepository repository,
-    CompanionState? initialState,
-  }) : _repository = repository,
-       _state = initialState ?? CompanionState.initial();
+  CompanionController({required CompanionRepository repository})
+    : _repository = repository;
 
   final CompanionRepository _repository;
 
-  CompanionState _state;
+  CompanionState _state = CompanionState.initial();
 
   bool _isInitialized = false;
 
   CompanionState get state => _state;
+
+  bool get isInitialized => _isInitialized;
 
   Future<void> initialize() async {
     if (_isInitialized) {
       return;
     }
 
-    try {
-      final storedState = await _repository.load();
+    final storedState = await _repository.load();
 
-      _state = (storedState ?? _state).applyTimeDecay(now: DateTime.now());
-    } catch (error, stackTrace) {
-      debugPrint(
-        'Companion state could not be loaded: '
-        '$error\n$stackTrace',
-      );
-    }
+    final initialState = storedState ?? CompanionState.initial();
+
+    _state = initialState.applyTimeDecay(now: DateTime.now());
 
     _isInitialized = true;
+
     notifyListeners();
 
     await _saveState();
+  }
+
+  Future<void> rename(String name) async {
+    final trimmedName = name.trim();
+
+    if (trimmedName.isEmpty || trimmedName == _state.name) {
+      return;
+    }
+
+    await _applyState(_state.rename(trimmedName));
+  }
+
+  Future<void> recordQuizAnswer({required bool isCorrect}) async {
+    await _applyState(_state.recordQuizAnswer(isCorrect: isCorrect));
   }
 
   Future<void> feed() async {
@@ -52,8 +61,8 @@ class CompanionController extends ChangeNotifier {
     await _applyState(_state.rest());
   }
 
-  Future<void> recordQuizAnswer({required bool isCorrect}) async {
-    await _applyState(_state.recordQuizAnswer(isCorrect: isCorrect));
+  Future<void> pet() async {
+    await _applyState(_state.pet());
   }
 
   Future<void> refreshForElapsedTime() async {
@@ -67,21 +76,18 @@ class CompanionController extends ChangeNotifier {
   }
 
   Future<void> reset() async {
+    await _repository.clear();
+
     _state = CompanionState.initial();
+
     notifyListeners();
 
-    try {
-      await _repository.clear();
-    } catch (error, stackTrace) {
-      debugPrint(
-        'Companion state could not be cleared: '
-        '$error\n$stackTrace',
-      );
-    }
+    await _saveState();
   }
 
-  Future<void> _applyState(CompanionState nextState) async {
-    _state = nextState;
+  Future<void> _applyState(CompanionState newState) async {
+    _state = newState;
+
     notifyListeners();
 
     await _saveState();
@@ -92,7 +98,7 @@ class CompanionController extends ChangeNotifier {
       await _repository.save(_state);
     } catch (error, stackTrace) {
       debugPrint(
-        'Companion state could not be saved: '
+        'Failed to save companion state: '
         '$error\n$stackTrace',
       );
     }

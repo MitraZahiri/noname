@@ -2,6 +2,8 @@ enum CompanionMood { happy, curious, hungry, sleepy, sad }
 
 enum CompanionStage { baby, child, explorer, scholar }
 
+enum CompanionNeed { none, food, happiness, rest, learning }
+
 class CompanionState {
   const CompanionState({
     required this.name,
@@ -25,13 +27,13 @@ class CompanionState {
     );
   }
 
+  final String name;
   final int satiety;
   final int happiness;
   final int energy;
   final int knowledge;
   final int totalInteractions;
   final DateTime lastUpdatedAt;
-  final String name;
 
   CompanionMood get mood {
     if (satiety <= 25) {
@@ -53,6 +55,26 @@ class CompanionState {
     return CompanionMood.happy;
   }
 
+  CompanionNeed get primaryNeed {
+    if (satiety <= 35) {
+      return CompanionNeed.food;
+    }
+
+    if (energy <= 35) {
+      return CompanionNeed.rest;
+    }
+
+    if (happiness <= 40) {
+      return CompanionNeed.happiness;
+    }
+
+    if (knowledge < 50) {
+      return CompanionNeed.learning;
+    }
+
+    return CompanionNeed.none;
+  }
+
   CompanionStage get stage {
     if (knowledge >= 500) {
       return CompanionStage.scholar;
@@ -67,6 +89,58 @@ class CompanionState {
     }
 
     return CompanionStage.baby;
+  }
+
+  int get stageStartKnowledge {
+    return switch (stage) {
+      CompanionStage.baby => 0,
+      CompanionStage.child => 50,
+      CompanionStage.explorer => 200,
+      CompanionStage.scholar => 500,
+    };
+  }
+
+  int? get nextStageKnowledge {
+    return switch (stage) {
+      CompanionStage.baby => 50,
+      CompanionStage.child => 200,
+      CompanionStage.explorer => 500,
+      CompanionStage.scholar => null,
+    };
+  }
+
+  double get stageProgress {
+    final nextKnowledge = nextStageKnowledge;
+
+    if (nextKnowledge == null) {
+      return 1.0;
+    }
+
+    final startKnowledge = stageStartKnowledge;
+
+    final requiredKnowledge = nextKnowledge - startKnowledge;
+
+    if (requiredKnowledge <= 0) {
+      return 1.0;
+    }
+
+    final earnedKnowledge = knowledge - startKnowledge;
+
+    return (earnedKnowledge / requiredKnowledge).clamp(0.0, 1.0);
+  }
+
+  CompanionState rename(String newName) {
+    final trimmedName = newName.trim();
+
+    if (trimmedName.isEmpty) {
+      return this;
+    }
+
+    if (trimmedName == name) {
+      return this;
+    }
+
+    return copyWith(name: trimmedName, lastUpdatedAt: DateTime.now());
   }
 
   CompanionState recordQuizAnswer({required bool isCorrect}) {
@@ -102,6 +176,14 @@ class CompanionState {
     return copyWith(
       energy: _clamp(energy + 30),
       satiety: _clamp(satiety - 5),
+      totalInteractions: totalInteractions + 1,
+      lastUpdatedAt: DateTime.now(),
+    );
+  }
+
+  CompanionState pet() {
+    return copyWith(
+      happiness: _clamp(happiness + 5),
       totalInteractions: totalInteractions + 1,
       lastUpdatedAt: DateTime.now(),
     );
