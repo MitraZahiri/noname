@@ -29,6 +29,8 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
     with WidgetsBindingObserver {
   _HabitatAction _action = _HabitatAction.none;
 
+  bool _isEditingHabitat = false;
+
   late final DailyGoalsController _dailyGoalsController;
 
   @override
@@ -82,7 +84,7 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
     _HabitatAction action,
     Future<void> Function() operation,
   ) async {
-    if (_action != _HabitatAction.none) {
+    if (_action != _HabitatAction.none || _isEditingHabitat) {
       return;
     }
 
@@ -118,6 +120,10 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
   }
 
   Future<void> _openLearningQuiz() async {
+    if (_isEditingHabitat) {
+      return;
+    }
+
     final localeCode = Localizations.localeOf(context).languageCode;
 
     final isTurkish = localeCode == 'tr';
@@ -248,9 +254,7 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
                                 .prepareNextQuestion(localeCode: localeCode);
 
                             selectedIndex = null;
-
                             answered = false;
-
                             knowledgeReward = 0;
                           });
                         },
@@ -281,6 +285,10 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
   }
 
   Future<void> _openHabitatShop() async {
+    if (_isEditingHabitat) {
+      return;
+    }
+
     if (!_dailyGoalsController.isInitialized) {
       await _dailyGoalsController.initialize();
     }
@@ -296,6 +304,37 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
       controller: _dailyGoalsController,
       isTurkish: isTurkish,
     );
+  }
+
+  void _toggleHabitatEditing() {
+    if (_action != _HabitatAction.none) {
+      return;
+    }
+
+    setState(() {
+      _isEditingHabitat = !_isEditingHabitat;
+    });
+  }
+
+  Future<void> _resetHabitatPositions() async {
+    final isTurkish = Localizations.localeOf(context).languageCode == 'tr';
+
+    final messenger = ScaffoldMessenger.of(context);
+
+    final message =
+        isTurkish
+            ? 'Dekor konumları sıfırlandı.'
+            : 'Decoration positions were reset.';
+
+    await _dailyGoalsController.resetItemPositions();
+
+    if (!mounted) {
+      return;
+    }
+
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -319,14 +358,45 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
                       : '${state.name}\'s Habitat',
                 ),
                 actions: [
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: TextButton.icon(
-                      onPressed: _openHabitatShop,
-                      icon: const Icon(Icons.storefront_rounded),
-                      label: Text('🪙 ${_dailyGoalsController.coins}'),
+                  if (_isEditingHabitat)
+                    IconButton(
+                      tooltip:
+                          isTurkish ? 'Konumları sıfırla' : 'Reset positions',
+                      onPressed:
+                          _dailyGoalsController.placedItemCount > 0
+                              ? () {
+                                unawaited(_resetHabitatPositions());
+                              }
+                              : null,
+                      icon: const Icon(Icons.restart_alt_rounded),
+                    ),
+
+                  TextButton.icon(
+                    onPressed:
+                        _action == _HabitatAction.none
+                            ? _toggleHabitatEditing
+                            : null,
+                    icon: Icon(
+                      _isEditingHabitat
+                          ? Icons.check_rounded
+                          : Icons.edit_rounded,
+                    ),
+                    label: Text(
+                      _isEditingHabitat
+                          ? (isTurkish ? 'Bitti' : 'Done')
+                          : (isTurkish ? 'Düzenle' : 'Edit'),
                     ),
                   ),
+
+                  if (!_isEditingHabitat)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: TextButton.icon(
+                        onPressed: _openHabitatShop,
+                        icon: const Icon(Icons.storefront_rounded),
+                        label: Text('🪙 ${_dailyGoalsController.coins}'),
+                      ),
+                    ),
                 ],
               ),
               body: SafeArea(
@@ -339,6 +409,7 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
                         state: state,
                         action: _action,
                         isTurkish: isTurkish,
+                        isEditing: _isEditingHabitat,
                         onAction: _performAction,
                         onLearn: _openLearningQuiz,
                       ),
@@ -371,6 +442,7 @@ class _HabitatRoom extends StatelessWidget {
     required this.state,
     required this.action,
     required this.isTurkish,
+    required this.isEditing,
     required this.onAction,
     required this.onLearn,
   });
@@ -384,6 +456,8 @@ class _HabitatRoom extends StatelessWidget {
   final _HabitatAction action;
 
   final bool isTurkish;
+
+  final bool isEditing;
 
   final Future<void> Function(
     _HabitatAction action,
@@ -415,7 +489,7 @@ class _HabitatRoom extends StatelessWidget {
                 left: 24,
                 child: FilledButton.tonalIcon(
                   onPressed:
-                      action == _HabitatAction.none
+                      !isEditing && action == _HabitatAction.none
                           ? () async {
                             await onLearn();
                           }
@@ -456,6 +530,7 @@ class _HabitatRoom extends StatelessWidget {
                 child: _PlacedHabitatDecorations(
                   controller: rewardsController,
                   isTurkish: isTurkish,
+                  isEditing: isEditing,
                 ),
               ),
 
@@ -467,47 +542,83 @@ class _HabitatRoom extends StatelessWidget {
                 ),
               ),
 
-              Positioned(
-                left: 18,
-                bottom: 28,
-                child: _RoomAction(
-                  icon: Icons.restaurant_rounded,
-                  label: isTurkish ? 'Besle' : 'Feed',
-                  enabled: action == _HabitatAction.none,
-                  onTap: () async {
-                    await onAction(_HabitatAction.feeding, controller.feed);
-                  },
-                ),
-              ),
+              if (isEditing)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 20,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colors.surface.withValues(alpha: 0.90),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.open_with_rounded, size: 18),
 
-              Positioned(
-                bottom: 28,
-                left: 0,
-                right: 0,
-                child: Center(
+                          const SizedBox(width: 7),
+
+                          Text(
+                            isTurkish
+                                ? 'Dekorları sürükleyerek yerleştir'
+                                : 'Drag decorations to arrange',
+                            style: Theme.of(context).textTheme.labelMedium
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+              else ...[
+                Positioned(
+                  left: 18,
+                  bottom: 28,
                   child: _RoomAction(
-                    icon: Icons.toys_rounded,
-                    label: isTurkish ? 'Oyna' : 'Play',
+                    icon: Icons.restaurant_rounded,
+                    label: isTurkish ? 'Besle' : 'Feed',
                     enabled: action == _HabitatAction.none,
                     onTap: () async {
-                      await onAction(_HabitatAction.playing, controller.play);
+                      await onAction(_HabitatAction.feeding, controller.feed);
                     },
                   ),
                 ),
-              ),
 
-              Positioned(
-                right: 18,
-                bottom: 28,
-                child: _RoomAction(
-                  icon: Icons.bed_rounded,
-                  label: isTurkish ? 'Uyu' : 'Sleep',
-                  enabled: action == _HabitatAction.none,
-                  onTap: () async {
-                    await onAction(_HabitatAction.resting, controller.rest);
-                  },
+                Positioned(
+                  bottom: 28,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: _RoomAction(
+                      icon: Icons.toys_rounded,
+                      label: isTurkish ? 'Oyna' : 'Play',
+                      enabled: action == _HabitatAction.none,
+                      onTap: () async {
+                        await onAction(_HabitatAction.playing, controller.play);
+                      },
+                    ),
+                  ),
                 ),
-              ),
+
+                Positioned(
+                  right: 18,
+                  bottom: 28,
+                  child: _RoomAction(
+                    icon: Icons.bed_rounded,
+                    label: isTurkish ? 'Uyu' : 'Sleep',
+                    enabled: action == _HabitatAction.none,
+                    onTap: () async {
+                      await onAction(_HabitatAction.resting, controller.rest);
+                    },
+                  ),
+                ),
+              ],
             ],
           ),
         );
@@ -520,10 +631,14 @@ class _PlacedHabitatDecorations extends StatelessWidget {
   const _PlacedHabitatDecorations({
     required this.controller,
     required this.isTurkish,
+    required this.isEditing,
   });
 
   final DailyGoalsController controller;
+
   final bool isTurkish;
+
+  final bool isEditing;
 
   @override
   Widget build(BuildContext context) {
@@ -542,6 +657,7 @@ class _PlacedHabitatDecorations extends StatelessWidget {
                 size: 52,
                 roomSize: roomSize,
                 isTurkish: isTurkish,
+                isEditing: isEditing,
               ),
 
             if (controller.isPlaced(HabitatShopItem.teddy))
@@ -553,6 +669,7 @@ class _PlacedHabitatDecorations extends StatelessWidget {
                 size: 48,
                 roomSize: roomSize,
                 isTurkish: isTurkish,
+                isEditing: isEditing,
               ),
 
             if (controller.isPlaced(HabitatShopItem.lamp))
@@ -564,6 +681,7 @@ class _PlacedHabitatDecorations extends StatelessWidget {
                 size: 42,
                 roomSize: roomSize,
                 isTurkish: isTurkish,
+                isEditing: isEditing,
               ),
 
             if (controller.isPlaced(HabitatShopItem.bookshelf))
@@ -575,6 +693,7 @@ class _PlacedHabitatDecorations extends StatelessWidget {
                 size: 48,
                 roomSize: roomSize,
                 isTurkish: isTurkish,
+                isEditing: isEditing,
               ),
           ],
         );
@@ -592,14 +711,22 @@ class _DraggableHabitatDecoration extends StatefulWidget {
     required this.size,
     required this.roomSize,
     required this.isTurkish,
+    required this.isEditing,
   });
 
   final DailyGoalsController controller;
+
   final HabitatShopItem item;
+
   final String emoji;
+
   final double size;
+
   final Size roomSize;
+
   final bool isTurkish;
+
+  final bool isEditing;
 
   @override
   State<_DraggableHabitatDecoration> createState() =>
@@ -609,12 +736,18 @@ class _DraggableHabitatDecoration extends StatefulWidget {
 class _DraggableHabitatDecorationState
     extends State<_DraggableHabitatDecoration> {
   static const double _horizontalPadding = 12;
+
   static const double _topPadding = 122;
+
   static const double _bottomPadding = 86;
 
   late Offset _position;
 
   bool _isDragging = false;
+
+  double get _decorationExtent {
+    return widget.size + 16;
+  }
 
   @override
   void initState() {
@@ -634,7 +767,7 @@ class _DraggableHabitatDecorationState
 
   double get _usableWidth {
     final value =
-        widget.roomSize.width - widget.size - (_horizontalPadding * 2);
+        widget.roomSize.width - _decorationExtent - (_horizontalPadding * 2);
 
     if (value <= 1) {
       return 1;
@@ -645,7 +778,10 @@ class _DraggableHabitatDecorationState
 
   double get _usableHeight {
     final value =
-        widget.roomSize.height - widget.size - _topPadding - _bottomPadding;
+        widget.roomSize.height -
+        _decorationExtent -
+        _topPadding -
+        _bottomPadding;
 
     if (value <= 1) {
       return 1;
@@ -665,59 +801,88 @@ class _DraggableHabitatDecorationState
   Widget build(BuildContext context) {
     final pixelPosition = _pixelPosition;
 
+    final colors = Theme.of(context).colorScheme;
+
     return Positioned(
       left: pixelPosition.dx,
       top: pixelPosition.dy,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
+      child: IgnorePointer(
+        ignoring: !widget.isEditing,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
 
-        onPanStart: (_) {
-          setState(() {
-            _isDragging = true;
-          });
-        },
+          onPanStart: (_) {
+            setState(() {
+              _isDragging = true;
+            });
+          },
 
-        onPanUpdate: (details) {
-          final nextX = _position.dx + (details.delta.dx / _usableWidth);
+          onPanUpdate: (details) {
+            final nextX = _position.dx + (details.delta.dx / _usableWidth);
 
-          final nextY = _position.dy + (details.delta.dy / _usableHeight);
+            final nextY = _position.dy + (details.delta.dy / _usableHeight);
 
-          setState(() {
-            _position = Offset(
-              nextX.clamp(0.0, 1.0).toDouble(),
-              nextY.clamp(0.0, 1.0).toDouble(),
-            );
-          });
-        },
+            setState(() {
+              _position = Offset(
+                nextX.clamp(0.0, 1.0).toDouble(),
+                nextY.clamp(0.0, 1.0).toDouble(),
+              );
+            });
+          },
 
-        onPanCancel: () {
-          setState(() {
-            _isDragging = false;
+          onPanCancel: () {
+            setState(() {
+              _isDragging = false;
 
-            _position = widget.controller.positionFor(widget.item);
-          });
-        },
+              _position = widget.controller.positionFor(widget.item);
+            });
+          },
 
-        onPanEnd: (_) {
-          final newPosition = _position;
+          onPanEnd: (_) {
+            final newPosition = _position;
 
-          setState(() {
-            _isDragging = false;
-          });
+            setState(() {
+              _isDragging = false;
+            });
 
-          unawaited(_savePosition(newPosition));
-        },
+            unawaited(_savePosition(newPosition));
+          },
 
-        child: AnimatedScale(
-          scale: _isDragging ? 1.15 : 1,
-          duration: const Duration(milliseconds: 120),
-          child: AnimatedOpacity(
-            opacity: _isDragging ? 0.82 : 1,
-            duration: const Duration(milliseconds: 120),
-            child: SizedBox(
-              width: widget.size + 16,
-              height: widget.size + 16,
-              child: Center(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            width: _decorationExtent,
+            height: _decorationExtent,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color:
+                  widget.isEditing
+                      ? colors.surface.withValues(alpha: 0.30)
+                      : Colors.transparent,
+              borderRadius: BorderRadius.circular(16),
+              border:
+                  widget.isEditing
+                      ? Border.all(
+                        color: colors.primary.withValues(alpha: 0.65),
+                        width: 2,
+                      )
+                      : null,
+              boxShadow:
+                  widget.isEditing && _isDragging
+                      ? [
+                        BoxShadow(
+                          color: colors.shadow.withValues(alpha: 0.20),
+                          blurRadius: 14,
+                          offset: const Offset(0, 5),
+                        ),
+                      ]
+                      : null,
+            ),
+            child: AnimatedScale(
+              scale: _isDragging ? 1.15 : 1,
+              duration: const Duration(milliseconds: 120),
+              child: AnimatedOpacity(
+                opacity: _isDragging ? 0.82 : 1,
+                duration: const Duration(milliseconds: 120),
                 child: Text(
                   widget.emoji,
                   style: TextStyle(fontSize: widget.size),
@@ -767,7 +932,9 @@ class _DailyGoalsCard extends StatelessWidget {
   });
 
   final DailyGoalsController controller;
+
   final String companionName;
+
   final bool isTurkish;
 
   @override
@@ -993,7 +1160,9 @@ class _DailyGoalRow extends StatelessWidget {
   });
 
   final bool completed;
+
   final IconData icon;
+
   final String text;
 
   @override
@@ -1041,7 +1210,9 @@ class _CompanionSpeechBubble extends StatelessWidget {
   });
 
   final CompanionNeed need;
+
   final String name;
+
   final bool isTurkish;
 
   @override
@@ -1109,7 +1280,9 @@ class _CompanionCharacter extends StatelessWidget {
   });
 
   final CompanionState state;
+
   final _HabitatAction action;
+
   final Future<void> Function() onPet;
 
   @override
@@ -1204,8 +1377,11 @@ class _RoomAction extends StatelessWidget {
   });
 
   final IconData icon;
+
   final String label;
+
   final bool enabled;
+
   final VoidCallback onTap;
 
   @override
@@ -1238,6 +1414,7 @@ class _StageBadge extends StatelessWidget {
   const _StageBadge({required this.stage, required this.isTurkish});
 
   final CompanionStage stage;
+
   final bool isTurkish;
 
   @override
@@ -1261,6 +1438,7 @@ class _GrowthProgress extends StatelessWidget {
   const _GrowthProgress({required this.state, required this.isTurkish});
 
   final CompanionState state;
+
   final bool isTurkish;
 
   @override
@@ -1303,8 +1481,7 @@ class _GrowthProgress extends StatelessWidget {
                 Text(
                   nextStage == null
                       ? currentStage
-                      : '$currentStage → '
-                          '$nextStage',
+                      : '$currentStage → $nextStage',
                   style: Theme.of(
                     context,
                   ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
@@ -1382,6 +1559,7 @@ class _StatsPanel extends StatelessWidget {
   const _StatsPanel({required this.state, required this.isTurkish});
 
   final CompanionState state;
+
   final bool isTurkish;
 
   @override
@@ -1429,7 +1607,9 @@ class _Stat extends StatelessWidget {
   const _Stat({required this.icon, required this.value, required this.label});
 
   final IconData icon;
+
   final int value;
+
   final String label;
 
   @override
@@ -1463,7 +1643,9 @@ class _KnowledgeRewardBanner extends StatelessWidget {
   });
 
   final int amount;
+
   final bool isCorrect;
+
   final bool isTurkish;
 
   @override
@@ -1509,10 +1691,15 @@ class _QuizOptionButton extends StatelessWidget {
   });
 
   final String text;
+
   final int index;
+
   final int? selectedIndex;
+
   final int correctIndex;
+
   final bool answered;
+
   final VoidCallback onPressed;
 
   @override
@@ -1524,6 +1711,7 @@ class _QuizOptionButton extends StatelessWidget {
     final isCorrect = index == correctIndex;
 
     Color? backgroundColor;
+
     Color? foregroundColor;
 
     if (answered) {
@@ -1570,7 +1758,9 @@ class _QuizResultCard extends StatelessWidget {
   });
 
   final bool isCorrect;
+
   final String explanation;
+
   final bool isTurkish;
 
   @override
