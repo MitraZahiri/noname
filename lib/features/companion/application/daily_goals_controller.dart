@@ -7,6 +7,8 @@ class DailyGoalsController extends ChangeNotifier {
   DailyGoalsController({SharedPreferencesAsync? preferences})
     : _preferences = preferences ?? SharedPreferencesAsync();
 
+  static const int dailyCompletionReward = 25;
+
   static const String _dateKey = 'companion_daily_goals_date';
 
   static const String _quizKey = 'companion_daily_goal_quiz';
@@ -20,6 +22,11 @@ class DailyGoalsController extends ChangeNotifier {
   static const String _lastCompletedDateKey =
       'companion_daily_goal_last_completed_date';
 
+  static const String _coinsKey = 'companion_coins';
+
+  static const String _lastRewardedDateKey =
+      'companion_daily_goal_last_rewarded_date';
+
   final SharedPreferencesAsync _preferences;
 
   bool _quizCompleted = false;
@@ -27,7 +34,10 @@ class DailyGoalsController extends ChangeNotifier {
   bool _playCompleted = false;
 
   int _streak = 0;
+  int _coins = 0;
+
   String? _lastCompletedDate;
+  String? _lastRewardedDate;
 
   bool _isInitialized = false;
   bool _isDisposed = false;
@@ -41,6 +51,8 @@ class DailyGoalsController extends ChangeNotifier {
   bool get playCompleted => _playCompleted;
 
   int get streak => _streak;
+
+  int get coins => _coins;
 
   int get completedCount {
     var count = 0;
@@ -70,6 +82,10 @@ class DailyGoalsController extends ChangeNotifier {
     return completedCount == totalGoals;
   }
 
+  bool get rewardEarnedToday {
+    return _lastRewardedDate == _dateValue(DateTime.now());
+  }
+
   Future<void> initialize() async {
     if (_isInitialized) {
       return;
@@ -87,7 +103,15 @@ class DailyGoalsController extends ChangeNotifier {
         _streak = 0;
       }
 
+      _coins = await _preferences.getInt(_coinsKey) ?? 0;
+
+      if (_coins < 0) {
+        _coins = 0;
+      }
+
       _lastCompletedDate = await _preferences.getString(_lastCompletedDateKey);
+
+      _lastRewardedDate = await _preferences.getString(_lastRewardedDateKey);
 
       if (storedDate == today) {
         _quizCompleted = await _preferences.getBool(_quizKey) ?? false;
@@ -98,6 +122,8 @@ class DailyGoalsController extends ChangeNotifier {
 
         if (allCompleted) {
           _updateStreakIfNeeded(now: now);
+
+          _grantDailyRewardIfNeeded(now: now);
         }
       } else {
         _quizCompleted = false;
@@ -167,6 +193,8 @@ class DailyGoalsController extends ChangeNotifier {
 
     if (allCompleted) {
       _updateStreakIfNeeded(now: now);
+
+      _grantDailyRewardIfNeeded(now: now);
     }
 
     _safeNotifyListeners();
@@ -238,6 +266,17 @@ class DailyGoalsController extends ChangeNotifier {
     _lastCompletedDate = today;
   }
 
+  void _grantDailyRewardIfNeeded({required DateTime now}) {
+    final today = _dateValue(now);
+
+    if (_lastRewardedDate == today) {
+      return;
+    }
+
+    _coins += dailyCompletionReward;
+    _lastRewardedDate = today;
+  }
+
   Future<void> _persist({required String date}) async {
     final operations = <Future<void>>[
       _preferences.setString(_dateKey, date),
@@ -245,6 +284,7 @@ class DailyGoalsController extends ChangeNotifier {
       _preferences.setBool(_feedKey, _feedCompleted),
       _preferences.setBool(_playKey, _playCompleted),
       _preferences.setInt(_streakKey, _streak),
+      _preferences.setInt(_coinsKey, _coins),
     ];
 
     final lastCompletedDate = _lastCompletedDate;
@@ -254,6 +294,16 @@ class DailyGoalsController extends ChangeNotifier {
     } else {
       operations.add(
         _preferences.setString(_lastCompletedDateKey, lastCompletedDate),
+      );
+    }
+
+    final lastRewardedDate = _lastRewardedDate;
+
+    if (lastRewardedDate == null) {
+      operations.add(_preferences.remove(_lastRewardedDateKey));
+    } else {
+      operations.add(
+        _preferences.setString(_lastRewardedDateKey, lastRewardedDate),
       );
     }
 

@@ -482,45 +482,16 @@ class _DailyGoalsCard extends StatelessWidget {
                   ),
                 ),
 
-                if (controller.streak > 0) ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colors.tertiaryContainer,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text('🔥', style: TextStyle(fontSize: 15)),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${controller.streak}',
-                          style: Theme.of(context).textTheme.labelLarge
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                  ),
+                _CoinBadge(coins: controller.coins),
 
-                  const SizedBox(width: 10),
-                ],
+                const SizedBox(width: 8),
 
-                Text(
-                  '${controller.completedCount}'
-                  ' / '
-                  '${controller.totalGoals}',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
-                ),
+                if (controller.streak > 0)
+                  _StreakBadge(streak: controller.streak),
               ],
             ),
 
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
 
             if (!controller.isInitialized)
               const LinearProgressIndicator()
@@ -549,7 +520,7 @@ class _DailyGoalsCard extends StatelessWidget {
                         : 'Play with $companionName',
               ),
 
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
 
               ClipRRect(
                 borderRadius: BorderRadius.circular(20),
@@ -559,13 +530,54 @@ class _DailyGoalsCard extends StatelessWidget {
                 ),
               ),
 
-              if (controller.allCompleted) ...[
-                const SizedBox(height: 8),
+              const SizedBox(height: 8),
+
+              if (controller.allCompleted && controller.rewardEarnedToday)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 9,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colors.tertiaryContainer,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      const Text('🪙', style: TextStyle(fontSize: 20)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          isTurkish
+                              ? '+${DailyGoalsController.dailyCompletionReward} coin kazandın!'
+                              : '+${DailyGoalsController.dailyCompletionReward} coins earned!',
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Text(
+                  isTurkish
+                      ? 'Tüm görevleri tamamla ve '
+                          '${DailyGoalsController.dailyCompletionReward} 🪙 kazan.'
+                      : 'Complete all goals and earn '
+                          '${DailyGoalsController.dailyCompletionReward} 🪙.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+
+              if (controller.allCompleted && controller.streak > 0) ...[
+                const SizedBox(height: 7),
 
                 Text(
                   isTurkish
-                      ? '🔥 ${controller.streak} günlük seri! Yarın da görevleri tamamlayarak seriyi koru.'
-                      : '🔥 ${controller.streak} day streak! Complete tomorrow\'s goals to keep it going.',
+                      ? '🔥 ${controller.streak} günlük seri! Yarın da devam et.'
+                      : '🔥 ${controller.streak} day streak! Come back tomorrow.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: colors.onSurfaceVariant,
                     fontWeight: FontWeight.w600,
@@ -575,6 +587,70 @@ class _DailyGoalsCard extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _CoinBadge extends StatelessWidget {
+  const _CoinBadge({required this.coins});
+
+  final int coins;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: colors.secondaryContainer,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('🪙', style: TextStyle(fontSize: 15)),
+          const SizedBox(width: 4),
+          Text(
+            '$coins',
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StreakBadge extends StatelessWidget {
+  const _StreakBadge({required this.streak});
+
+  final int streak;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: colors.tertiaryContainer,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('🔥', style: TextStyle(fontSize: 15)),
+          const SizedBox(width: 4),
+          Text(
+            '$streak',
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
+          ),
+        ],
       ),
     );
   }
