@@ -1,3 +1,5 @@
+import 'dart:ui' show Offset;
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -20,18 +22,10 @@ class DailyGoalsController extends ChangeNotifier {
 
   static const int dailyCompletionReward = 25;
 
-  // ---------------------------------------------------------------------------
-  // Daily goals
-  // ---------------------------------------------------------------------------
-
   static const String _dateKey = 'companion_daily_goals_date';
-
   static const String _quizKey = 'companion_daily_goal_quiz';
-
   static const String _feedKey = 'companion_daily_goal_feed';
-
   static const String _playKey = 'companion_daily_goal_play';
-
   static const String _streakKey = 'companion_daily_goal_streak';
 
   static const String _lastCompletedDateKey =
@@ -42,28 +36,14 @@ class DailyGoalsController extends ChangeNotifier {
   static const String _lastRewardedDateKey =
       'companion_daily_goal_last_rewarded_date';
 
-  // ---------------------------------------------------------------------------
-  // Habitat ownership
-  // ---------------------------------------------------------------------------
-
   static const String _plantOwnedKey = 'companion_shop_plant_owned';
-
   static const String _teddyOwnedKey = 'companion_shop_teddy_owned';
-
   static const String _lampOwnedKey = 'companion_shop_lamp_owned';
-
   static const String _bookshelfOwnedKey = 'companion_shop_bookshelf_owned';
 
-  // ---------------------------------------------------------------------------
-  // Habitat placement
-  // ---------------------------------------------------------------------------
-
   static const String _plantPlacedKey = 'companion_shop_plant_placed';
-
   static const String _teddyPlacedKey = 'companion_shop_teddy_placed';
-
   static const String _lampPlacedKey = 'companion_shop_lamp_placed';
-
   static const String _bookshelfPlacedKey = 'companion_shop_bookshelf_placed';
 
   final SharedPreferencesAsync _preferences;
@@ -79,15 +59,13 @@ class DailyGoalsController extends ChangeNotifier {
   String? _lastRewardedDate;
 
   final Set<HabitatShopItem> _ownedItems = <HabitatShopItem>{};
-
   final Set<HabitatShopItem> _placedItems = <HabitatShopItem>{};
+
+  final Map<HabitatShopItem, Offset> _itemPositions =
+      <HabitatShopItem, Offset>{};
 
   bool _isInitialized = false;
   bool _isDisposed = false;
-
-  // ---------------------------------------------------------------------------
-  // Getters
-  // ---------------------------------------------------------------------------
 
   bool get isInitialized => _isInitialized;
 
@@ -121,29 +99,17 @@ class DailyGoalsController extends ChangeNotifier {
 
   int get totalGoals => 3;
 
-  double get progress {
-    return completedCount / totalGoals;
-  }
+  double get progress => completedCount / totalGoals;
 
-  bool get allCompleted {
-    return completedCount == totalGoals;
-  }
+  bool get allCompleted => completedCount == totalGoals;
 
   bool get rewardEarnedToday {
     return _lastRewardedDate == _dateValue(DateTime.now());
   }
 
-  int get ownedItemCount {
-    return _ownedItems.length;
-  }
+  int get ownedItemCount => _ownedItems.length;
 
-  int get placedItemCount {
-    return _placedItems.length;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Habitat helpers
-  // ---------------------------------------------------------------------------
+  int get placedItemCount => _placedItems.length;
 
   bool isOwned(HabitatShopItem item) {
     return _ownedItems.contains(item);
@@ -166,9 +132,18 @@ class DailyGoalsController extends ChangeNotifier {
     };
   }
 
-  // ---------------------------------------------------------------------------
-  // Initialization
-  // ---------------------------------------------------------------------------
+  Offset positionFor(HabitatShopItem item) {
+    return _itemPositions[item] ?? defaultPositionFor(item);
+  }
+
+  Offset defaultPositionFor(HabitatShopItem item) {
+    return switch (item) {
+      HabitatShopItem.plant => const Offset(0.02, 1.0),
+      HabitatShopItem.teddy => const Offset(0.98, 1.0),
+      HabitatShopItem.lamp => const Offset(0.05, 0.10),
+      HabitatShopItem.bookshelf => const Offset(0.95, 0.12),
+    };
+  }
 
   Future<void> initialize() async {
     if (_isInitialized) {
@@ -198,8 +173,8 @@ class DailyGoalsController extends ChangeNotifier {
       _lastRewardedDate = await _preferences.getString(_lastRewardedDateKey);
 
       await _loadOwnedItems();
-
       await _loadPlacedItems();
+      await _loadItemPositions();
 
       if (storedDate == today) {
         _quizCompleted = await _preferences.getBool(_quizKey) ?? false;
@@ -210,7 +185,6 @@ class DailyGoalsController extends ChangeNotifier {
 
         if (allCompleted) {
           _updateStreakIfNeeded(now: now);
-
           _grantDailyRewardIfNeeded(now: now);
         }
       } else {
@@ -228,7 +202,6 @@ class DailyGoalsController extends ChangeNotifier {
     }
 
     _isInitialized = true;
-
     _safeNotifyListeners();
   }
 
@@ -240,10 +213,6 @@ class DailyGoalsController extends ChangeNotifier {
 
     await _ensureCurrentDay();
   }
-
-  // ---------------------------------------------------------------------------
-  // Daily goals
-  // ---------------------------------------------------------------------------
 
   Future<void> complete(DailyGoalType goal) async {
     if (!_isInitialized) {
@@ -286,7 +255,6 @@ class DailyGoalsController extends ChangeNotifier {
 
     if (allCompleted) {
       _updateStreakIfNeeded(now: now);
-
       _grantDailyRewardIfNeeded(now: now);
     }
 
@@ -301,10 +269,6 @@ class DailyGoalsController extends ChangeNotifier {
       );
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // Habitat shop
-  // ---------------------------------------------------------------------------
 
   Future<HabitatPurchaseResult> purchase(HabitatShopItem item) async {
     if (!_isInitialized) {
@@ -326,8 +290,6 @@ class DailyGoalsController extends ChangeNotifier {
     _coins -= price;
 
     _ownedItems.add(item);
-
-    // Yeni satın alınan eşya otomatik olarak habitatta gösterilir.
     _placedItems.add(item);
 
     _safeNotifyListeners();
@@ -342,11 +304,8 @@ class DailyGoalsController extends ChangeNotifier {
         '$error\n$stackTrace',
       );
 
-      // Satın alma başarısızsa local state geri alınır.
       _coins += price;
-
       _ownedItems.remove(item);
-
       _placedItems.remove(item);
 
       _safeNotifyListeners();
@@ -354,10 +313,6 @@ class DailyGoalsController extends ChangeNotifier {
       return HabitatPurchaseResult.saveFailed;
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // Habitat placement
-  // ---------------------------------------------------------------------------
 
   Future<HabitatPlacementResult> togglePlacement(HabitatShopItem item) async {
     if (!_isInitialized) {
@@ -383,18 +338,15 @@ class DailyGoalsController extends ChangeNotifier {
     try {
       await _persist(date: _dateValue(DateTime.now()));
 
-      if (wasPlaced) {
-        return HabitatPlacementResult.removed;
-      }
-
-      return HabitatPlacementResult.placed;
+      return wasPlaced
+          ? HabitatPlacementResult.removed
+          : HabitatPlacementResult.placed;
     } catch (error, stackTrace) {
       debugPrint(
         'Failed to update habitat item placement: '
         '$error\n$stackTrace',
       );
 
-      // Persist başarısızsa local değişikliği geri al.
       if (wasPlaced) {
         _placedItems.add(item);
       } else {
@@ -407,9 +359,77 @@ class DailyGoalsController extends ChangeNotifier {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Load owned items
-  // ---------------------------------------------------------------------------
+  Future<bool> updateItemPosition(HabitatShopItem item, Offset position) async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+
+    if (!isOwned(item)) {
+      return false;
+    }
+
+    final previousPosition = positionFor(item);
+    final normalizedPosition = _normalizePosition(position);
+
+    _itemPositions[item] = normalizedPosition;
+
+    _safeNotifyListeners();
+
+    try {
+      await Future.wait<void>([
+        _preferences.setDouble(_positionXKey(item), normalizedPosition.dx),
+        _preferences.setDouble(_positionYKey(item), normalizedPosition.dy),
+      ]);
+
+      return true;
+    } catch (error, stackTrace) {
+      debugPrint(
+        'Failed to save habitat item position: '
+        '$error\n$stackTrace',
+      );
+
+      _itemPositions[item] = previousPosition;
+
+      _safeNotifyListeners();
+
+      return false;
+    }
+  }
+
+  Future<void> resetItemPositions() async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+
+    final previousPositions = Map<HabitatShopItem, Offset>.from(_itemPositions);
+
+    _itemPositions.clear();
+
+    _safeNotifyListeners();
+
+    try {
+      final operations = <Future<void>>[];
+
+      for (final item in HabitatShopItem.values) {
+        operations.add(_preferences.remove(_positionXKey(item)));
+
+        operations.add(_preferences.remove(_positionYKey(item)));
+      }
+
+      await Future.wait<void>(operations);
+    } catch (error, stackTrace) {
+      debugPrint(
+        'Failed to reset habitat item positions: '
+        '$error\n$stackTrace',
+      );
+
+      _itemPositions
+        ..clear()
+        ..addAll(previousPositions);
+
+      _safeNotifyListeners();
+    }
+  }
 
   Future<void> _loadOwnedItems() async {
     _ownedItems.clear();
@@ -440,10 +460,6 @@ class DailyGoalsController extends ChangeNotifier {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Load placed items
-  // ---------------------------------------------------------------------------
-
   Future<void> _loadPlacedItems() async {
     _placedItems.clear();
 
@@ -455,8 +471,6 @@ class DailyGoalsController extends ChangeNotifier {
 
     final bookshelfPlaced = await _preferences.getBool(_bookshelfPlacedKey);
 
-    // Eski sürümden gelen satın alımlar için placed kaydı yoksa
-    // satın alınmış eşyayı varsayılan olarak yerleştirilmiş kabul ediyoruz.
     if (isOwned(HabitatShopItem.plant) && (plantPlaced ?? true)) {
       _placedItems.add(HabitatShopItem.plant);
     }
@@ -474,9 +488,21 @@ class DailyGoalsController extends ChangeNotifier {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Day reset
-  // ---------------------------------------------------------------------------
+  Future<void> _loadItemPositions() async {
+    _itemPositions.clear();
+
+    for (final item in HabitatShopItem.values) {
+      final x = await _preferences.getDouble(_positionXKey(item));
+
+      final y = await _preferences.getDouble(_positionYKey(item));
+
+      if (x == null || y == null) {
+        continue;
+      }
+
+      _itemPositions[item] = _normalizePosition(Offset(x, y));
+    }
+  }
 
   Future<void> _ensureCurrentDay() async {
     final now = DateTime.now();
@@ -515,10 +541,6 @@ class DailyGoalsController extends ChangeNotifier {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Streak
-  // ---------------------------------------------------------------------------
-
   void _updateStreakIfNeeded({required DateTime now}) {
     final today = _dateValue(now);
 
@@ -539,10 +561,6 @@ class DailyGoalsController extends ChangeNotifier {
     _lastCompletedDate = today;
   }
 
-  // ---------------------------------------------------------------------------
-  // Daily reward
-  // ---------------------------------------------------------------------------
-
   void _grantDailyRewardIfNeeded({required DateTime now}) {
     final today = _dateValue(now);
 
@@ -551,47 +569,27 @@ class DailyGoalsController extends ChangeNotifier {
     }
 
     _coins += dailyCompletionReward;
-
     _lastRewardedDate = today;
   }
-
-  // ---------------------------------------------------------------------------
-  // Persistence
-  // ---------------------------------------------------------------------------
 
   Future<void> _persist({required String date}) async {
     final operations = <Future<void>>[
       _preferences.setString(_dateKey, date),
-
       _preferences.setBool(_quizKey, _quizCompleted),
-
       _preferences.setBool(_feedKey, _feedCompleted),
-
       _preferences.setBool(_playKey, _playCompleted),
-
       _preferences.setInt(_streakKey, _streak),
-
       _preferences.setInt(_coinsKey, _coins),
-
-      // Owned items
       _preferences.setBool(_plantOwnedKey, isOwned(HabitatShopItem.plant)),
-
       _preferences.setBool(_teddyOwnedKey, isOwned(HabitatShopItem.teddy)),
-
       _preferences.setBool(_lampOwnedKey, isOwned(HabitatShopItem.lamp)),
-
       _preferences.setBool(
         _bookshelfOwnedKey,
         isOwned(HabitatShopItem.bookshelf),
       ),
-
-      // Placed items
       _preferences.setBool(_plantPlacedKey, isPlaced(HabitatShopItem.plant)),
-
       _preferences.setBool(_teddyPlacedKey, isPlaced(HabitatShopItem.teddy)),
-
       _preferences.setBool(_lampPlacedKey, isPlaced(HabitatShopItem.lamp)),
-
       _preferences.setBool(
         _bookshelfPlacedKey,
         isPlaced(HabitatShopItem.bookshelf),
@@ -621,9 +619,21 @@ class DailyGoalsController extends ChangeNotifier {
     await Future.wait<void>(operations);
   }
 
-  // ---------------------------------------------------------------------------
-  // Helpers
-  // ---------------------------------------------------------------------------
+  Offset _normalizePosition(Offset position) {
+    return Offset(_clampUnit(position.dx), _clampUnit(position.dy));
+  }
+
+  double _clampUnit(double value) {
+    return value.clamp(0.0, 1.0).toDouble();
+  }
+
+  String _positionXKey(HabitatShopItem item) {
+    return 'companion_shop_${item.name}_position_x';
+  }
+
+  String _positionYKey(HabitatShopItem item) {
+    return 'companion_shop_${item.name}_position_y';
+  }
 
   String _dateValue(DateTime date) {
     final month = date.month.toString().padLeft(2, '0');
@@ -638,10 +648,6 @@ class DailyGoalsController extends ChangeNotifier {
       notifyListeners();
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // Dispose
-  // ---------------------------------------------------------------------------
 
   @override
   void dispose() {

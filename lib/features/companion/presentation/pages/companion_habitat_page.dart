@@ -453,7 +453,10 @@ class _HabitatRoom extends StatelessWidget {
               ),
 
               Positioned.fill(
-                child: _PlacedHabitatDecorations(controller: rewardsController),
+                child: _PlacedHabitatDecorations(
+                  controller: rewardsController,
+                  isTurkish: isTurkish,
+                ),
               ),
 
               Center(
@@ -514,45 +517,245 @@ class _HabitatRoom extends StatelessWidget {
 }
 
 class _PlacedHabitatDecorations extends StatelessWidget {
-  const _PlacedHabitatDecorations({required this.controller});
+  const _PlacedHabitatDecorations({
+    required this.controller,
+    required this.isTurkish,
+  });
 
   final DailyGoalsController controller;
+  final bool isTurkish;
 
   @override
   Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Stack(
-        children: [
-          if (controller.isPlaced(HabitatShopItem.plant))
-            const Positioned(
-              left: 24,
-              bottom: 92,
-              child: Text('🪴', style: TextStyle(fontSize: 52)),
-            ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final roomSize = Size(constraints.maxWidth, constraints.maxHeight);
 
-          if (controller.isPlaced(HabitatShopItem.teddy))
-            const Positioned(
-              right: 28,
-              bottom: 88,
-              child: Text('🧸', style: TextStyle(fontSize: 48)),
-            ),
+        return Stack(
+          children: [
+            if (controller.isPlaced(HabitatShopItem.plant))
+              _DraggableHabitatDecoration(
+                key: const ValueKey('habitat-plant'),
+                controller: controller,
+                item: HabitatShopItem.plant,
+                emoji: '🪴',
+                size: 52,
+                roomSize: roomSize,
+                isTurkish: isTurkish,
+              ),
 
-          if (controller.isPlaced(HabitatShopItem.lamp))
-            const Positioned(
-              left: 30,
-              top: 150,
-              child: Text('💡', style: TextStyle(fontSize: 42)),
-            ),
+            if (controller.isPlaced(HabitatShopItem.teddy))
+              _DraggableHabitatDecoration(
+                key: const ValueKey('habitat-teddy'),
+                controller: controller,
+                item: HabitatShopItem.teddy,
+                emoji: '🧸',
+                size: 48,
+                roomSize: roomSize,
+                isTurkish: isTurkish,
+              ),
 
-          if (controller.isPlaced(HabitatShopItem.bookshelf))
-            const Positioned(
-              right: 24,
-              top: 150,
-              child: Text('📚', style: TextStyle(fontSize: 48)),
+            if (controller.isPlaced(HabitatShopItem.lamp))
+              _DraggableHabitatDecoration(
+                key: const ValueKey('habitat-lamp'),
+                controller: controller,
+                item: HabitatShopItem.lamp,
+                emoji: '💡',
+                size: 42,
+                roomSize: roomSize,
+                isTurkish: isTurkish,
+              ),
+
+            if (controller.isPlaced(HabitatShopItem.bookshelf))
+              _DraggableHabitatDecoration(
+                key: const ValueKey('habitat-bookshelf'),
+                controller: controller,
+                item: HabitatShopItem.bookshelf,
+                emoji: '📚',
+                size: 48,
+                roomSize: roomSize,
+                isTurkish: isTurkish,
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _DraggableHabitatDecoration extends StatefulWidget {
+  const _DraggableHabitatDecoration({
+    required super.key,
+    required this.controller,
+    required this.item,
+    required this.emoji,
+    required this.size,
+    required this.roomSize,
+    required this.isTurkish,
+  });
+
+  final DailyGoalsController controller;
+  final HabitatShopItem item;
+  final String emoji;
+  final double size;
+  final Size roomSize;
+  final bool isTurkish;
+
+  @override
+  State<_DraggableHabitatDecoration> createState() =>
+      _DraggableHabitatDecorationState();
+}
+
+class _DraggableHabitatDecorationState
+    extends State<_DraggableHabitatDecoration> {
+  static const double _horizontalPadding = 12;
+  static const double _topPadding = 122;
+  static const double _bottomPadding = 86;
+
+  late Offset _position;
+
+  bool _isDragging = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _position = widget.controller.positionFor(widget.item);
+  }
+
+  @override
+  void didUpdateWidget(covariant _DraggableHabitatDecoration oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (!_isDragging) {
+      _position = widget.controller.positionFor(widget.item);
+    }
+  }
+
+  double get _usableWidth {
+    final value =
+        widget.roomSize.width - widget.size - (_horizontalPadding * 2);
+
+    if (value <= 1) {
+      return 1;
+    }
+
+    return value;
+  }
+
+  double get _usableHeight {
+    final value =
+        widget.roomSize.height - widget.size - _topPadding - _bottomPadding;
+
+    if (value <= 1) {
+      return 1;
+    }
+
+    return value;
+  }
+
+  Offset get _pixelPosition {
+    return Offset(
+      _horizontalPadding + (_position.dx * _usableWidth),
+      _topPadding + (_position.dy * _usableHeight),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pixelPosition = _pixelPosition;
+
+    return Positioned(
+      left: pixelPosition.dx,
+      top: pixelPosition.dy,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+
+        onPanStart: (_) {
+          setState(() {
+            _isDragging = true;
+          });
+        },
+
+        onPanUpdate: (details) {
+          final nextX = _position.dx + (details.delta.dx / _usableWidth);
+
+          final nextY = _position.dy + (details.delta.dy / _usableHeight);
+
+          setState(() {
+            _position = Offset(
+              nextX.clamp(0.0, 1.0).toDouble(),
+              nextY.clamp(0.0, 1.0).toDouble(),
+            );
+          });
+        },
+
+        onPanCancel: () {
+          setState(() {
+            _isDragging = false;
+
+            _position = widget.controller.positionFor(widget.item);
+          });
+        },
+
+        onPanEnd: (_) {
+          final newPosition = _position;
+
+          setState(() {
+            _isDragging = false;
+          });
+
+          unawaited(_savePosition(newPosition));
+        },
+
+        child: AnimatedScale(
+          scale: _isDragging ? 1.15 : 1,
+          duration: const Duration(milliseconds: 120),
+          child: AnimatedOpacity(
+            opacity: _isDragging ? 0.82 : 1,
+            duration: const Duration(milliseconds: 120),
+            child: SizedBox(
+              width: widget.size + 16,
+              height: widget.size + 16,
+              child: Center(
+                child: Text(
+                  widget.emoji,
+                  style: TextStyle(fontSize: widget.size),
+                ),
+              ),
             ),
-        ],
+          ),
+        ),
       ),
     );
+  }
+
+  Future<void> _savePosition(Offset newPosition) async {
+    final saved = await widget.controller.updateItemPosition(
+      widget.item,
+      newPosition,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (saved) {
+      return;
+    }
+
+    setState(() {
+      _position = widget.controller.positionFor(widget.item);
+    });
+
+    final message =
+        widget.isTurkish
+            ? 'Dekorun konumu kaydedilemedi.'
+            : 'The decoration position could not be saved.';
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
