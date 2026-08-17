@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../quiz/application/quiz_controller.dart';
 import '../../application/companion_controller.dart';
+import '../../application/daily_goals_controller.dart';
 import '../../domain/entities/companion_state.dart';
 import '../widgets/companion_mascot.dart';
 
@@ -24,13 +25,25 @@ class CompanionHabitatPage extends StatefulWidget {
 class _CompanionHabitatPageState extends State<CompanionHabitatPage> {
   _HabitatAction _action = _HabitatAction.none;
 
+  late final DailyGoalsController _dailyGoalsController;
+
   @override
   void initState() {
     super.initState();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      widget.controller.refreshForElapsedTime();
+    _dailyGoalsController = DailyGoalsController();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await widget.controller.refreshForElapsedTime();
+
+      await _dailyGoalsController.initialize();
     });
+  }
+
+  @override
+  void dispose() {
+    _dailyGoalsController.dispose();
+    super.dispose();
   }
 
   Future<void> _performAction(
@@ -47,6 +60,18 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage> {
 
     try {
       await operation();
+
+      switch (action) {
+        case _HabitatAction.feeding:
+          await _dailyGoalsController.complete(DailyGoalType.feed);
+
+        case _HabitatAction.playing:
+          await _dailyGoalsController.complete(DailyGoalType.play);
+
+        case _HabitatAction.resting:
+        case _HabitatAction.none:
+          break;
+      }
 
       await Future<void>.delayed(const Duration(milliseconds: 850));
     } finally {
@@ -141,12 +166,18 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage> {
 
                           setSheetState(() {
                             selectedIndex = index;
+
                             answered = true;
+
                             knowledgeReward = selectedIsCorrect ? 10 : 2;
                           });
 
                           await widget.quizController.recordAnswer(
                             selectedIndex: index,
+                          );
+
+                          await _dailyGoalsController.complete(
+                            DailyGoalType.quiz,
                           );
                         },
                       ),
@@ -179,7 +210,9 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage> {
                                 .prepareNextQuestion(localeCode: localeCode);
 
                             selectedIndex = null;
+
                             answered = false;
+
                             knowledgeReward = 0;
                           });
                         },
@@ -214,36 +247,50 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage> {
     return AnimatedBuilder(
       animation: widget.controller,
       builder: (context, _) {
-        final state = widget.controller.state;
+        return AnimatedBuilder(
+          animation: _dailyGoalsController,
+          builder: (context, _) {
+            final state = widget.controller.state;
 
-        final isTurkish = Localizations.localeOf(context).languageCode == 'tr';
+            final isTurkish =
+                Localizations.localeOf(context).languageCode == 'tr';
 
-        return Scaffold(
-          appBar: AppBar(
-            title: Text(
-              isTurkish ? '${state.name} Habitatı' : '${state.name}\'s Habitat',
-            ),
-          ),
-          body: SafeArea(
-            child: Column(
-              children: [
-                Expanded(
-                  child: _HabitatRoom(
-                    controller: widget.controller,
-                    state: state,
-                    action: _action,
-                    isTurkish: isTurkish,
-                    onAction: _performAction,
-                    onLearn: _openLearningQuiz,
-                  ),
+            return Scaffold(
+              appBar: AppBar(
+                title: Text(
+                  isTurkish
+                      ? '${state.name} Habitatı'
+                      : '${state.name}\'s Habitat',
                 ),
+              ),
+              body: SafeArea(
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: _HabitatRoom(
+                        controller: widget.controller,
+                        state: state,
+                        action: _action,
+                        isTurkish: isTurkish,
+                        onAction: _performAction,
+                        onLearn: _openLearningQuiz,
+                      ),
+                    ),
 
-                _GrowthProgress(state: state, isTurkish: isTurkish),
+                    _DailyGoalsCard(
+                      controller: _dailyGoalsController,
+                      companionName: state.name,
+                      isTurkish: isTurkish,
+                    ),
 
-                _StatsPanel(state: state, isTurkish: isTurkish),
-              ],
-            ),
-          ),
+                    _GrowthProgress(state: state, isTurkish: isTurkish),
+
+                    _StatsPanel(state: state, isTurkish: isTurkish),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );
@@ -389,6 +436,158 @@ class _HabitatRoom extends StatelessWidget {
   }
 }
 
+class _DailyGoalsCard extends StatelessWidget {
+  const _DailyGoalsCard({
+    required this.controller,
+    required this.companionName,
+    required this.isTurkish,
+  });
+
+  final DailyGoalsController controller;
+
+  final String companionName;
+  final bool isTurkish;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Material(
+      color: colors.surfaceContainerLow,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  controller.allCompleted
+                      ? Icons.emoji_events_rounded
+                      : Icons.flag_rounded,
+                  size: 20,
+                ),
+
+                const SizedBox(width: 8),
+
+                Expanded(
+                  child: Text(
+                    controller.allCompleted
+                        ? (isTurkish
+                            ? 'Günlük görevler tamamlandı! 🏆'
+                            : 'Daily goals complete! 🏆')
+                        : (isTurkish ? 'Günlük Görevler' : 'Daily Goals'),
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+
+                Text(
+                  '${controller.completedCount}'
+                  ' / '
+                  '${controller.totalGoals}',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 8),
+
+            if (!controller.isInitialized)
+              const LinearProgressIndicator()
+            else ...[
+              _DailyGoalRow(
+                completed: controller.quizCompleted,
+                icon: Icons.school_rounded,
+                text: isTurkish ? '1 soru cevapla' : 'Answer 1 question',
+              ),
+
+              _DailyGoalRow(
+                completed: controller.feedCompleted,
+                icon: Icons.restaurant_rounded,
+                text:
+                    isTurkish
+                        ? '$companionName\'yu besle'
+                        : 'Feed $companionName',
+              ),
+
+              _DailyGoalRow(
+                completed: controller.playCompleted,
+                icon: Icons.toys_rounded,
+                text:
+                    isTurkish
+                        ? '$companionName ile oyna'
+                        : 'Play with $companionName',
+              ),
+
+              const SizedBox(height: 6),
+
+              ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: LinearProgressIndicator(
+                  value: controller.progress,
+                  minHeight: 7,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DailyGoalRow extends StatelessWidget {
+  const _DailyGoalRow({
+    required this.completed,
+    required this.icon,
+    required this.text,
+  });
+
+  final bool completed;
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Icon(
+            completed
+                ? Icons.check_circle_rounded
+                : Icons.radio_button_unchecked_rounded,
+            size: 18,
+            color: completed ? colors.primary : colors.onSurfaceVariant,
+          ),
+
+          const SizedBox(width: 8),
+
+          Icon(icon, size: 17),
+
+          const SizedBox(width: 6),
+
+          Expanded(
+            child: Text(
+              text,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                decoration: completed ? TextDecoration.lineThrough : null,
+                color: completed ? colors.onSurfaceVariant : null,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _CompanionSpeechBubble extends StatelessWidget {
   const _CompanionSpeechBubble({
     required this.need,
@@ -466,6 +665,7 @@ class _CompanionCharacter extends StatelessWidget {
 
   final CompanionState state;
   final _HabitatAction action;
+
   final Future<void> Function() onPet;
 
   @override
@@ -597,8 +797,11 @@ class _StageBadge extends StatelessWidget {
       avatar: const Icon(Icons.auto_awesome_rounded, size: 17),
       label: Text(switch (stage) {
         CompanionStage.baby => isTurkish ? 'Bebek' : 'Baby',
+
         CompanionStage.child => isTurkish ? 'Çocuk' : 'Child',
+
         CompanionStage.explorer => isTurkish ? 'Kaşif' : 'Explorer',
+
         CompanionStage.scholar => isTurkish ? 'Bilgin' : 'Scholar',
       }),
     );
@@ -629,14 +832,16 @@ class _GrowthProgress extends StatelessWidget {
     return Material(
       color: colors.surface,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 const Icon(Icons.auto_awesome_rounded, size: 20),
+
                 const SizedBox(width: 8),
+
                 Expanded(
                   child: Text(
                     isTurkish ? 'Gelişim' : 'Growth',
@@ -645,6 +850,7 @@ class _GrowthProgress extends StatelessWidget {
                     ),
                   ),
                 ),
+
                 Text(
                   nextStage == null
                       ? currentStage
@@ -656,17 +862,17 @@ class _GrowthProgress extends StatelessWidget {
               ],
             ),
 
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
 
             ClipRRect(
               borderRadius: BorderRadius.circular(20),
               child: LinearProgressIndicator(
                 value: state.stageProgress,
-                minHeight: 9,
+                minHeight: 8,
               ),
             ),
 
-            const SizedBox(height: 7),
+            const SizedBox(height: 6),
 
             Row(
               children: [
@@ -700,8 +906,11 @@ class _GrowthProgress extends StatelessWidget {
   String _stageText(CompanionStage stage, {required bool isTurkish}) {
     return switch (stage) {
       CompanionStage.baby => isTurkish ? 'Bebek' : 'Baby',
+
       CompanionStage.child => isTurkish ? 'Çocuk' : 'Child',
+
       CompanionStage.explorer => isTurkish ? 'Kaşif' : 'Explorer',
+
       CompanionStage.scholar => isTurkish ? 'Bilgin' : 'Scholar',
     };
   }
@@ -709,8 +918,11 @@ class _GrowthProgress extends StatelessWidget {
   String? _nextStageText(CompanionStage stage, {required bool isTurkish}) {
     return switch (stage) {
       CompanionStage.baby => isTurkish ? 'Çocuk' : 'Child',
+
       CompanionStage.child => isTurkish ? 'Kaşif' : 'Explorer',
+
       CompanionStage.explorer => isTurkish ? 'Bilgin' : 'Scholar',
+
       CompanionStage.scholar => null,
     };
   }
@@ -729,7 +941,7 @@ class _StatsPanel extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(14),
           child: Row(
             children: [
               _Stat(
@@ -774,8 +986,11 @@ class _Stat extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 20),
+
           const SizedBox(height: 2),
+
           Text('$value', style: const TextStyle(fontWeight: FontWeight.bold)),
+
           Text(
             label,
             overflow: TextOverflow.ellipsis,
@@ -811,7 +1026,9 @@ class _KnowledgeRewardBanner extends StatelessWidget {
       child: Row(
         children: [
           const Icon(Icons.school_rounded),
+
           const SizedBox(width: 10),
+
           Expanded(
             child: Text(
               isTurkish ? '+$amount Bilgi' : '+$amount Knowledge',
@@ -820,6 +1037,7 @@ class _KnowledgeRewardBanner extends StatelessWidget {
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
           ),
+
           Text(isCorrect ? '✨' : '📚', style: const TextStyle(fontSize: 22)),
         ],
       ),
@@ -858,9 +1076,11 @@ class _QuizOptionButton extends StatelessWidget {
     if (answered) {
       if (isCorrect) {
         backgroundColor = colors.primaryContainer;
+
         foregroundColor = colors.onPrimaryContainer;
       } else if (isSelected) {
         backgroundColor = colors.errorContainer;
+
         foregroundColor = colors.onErrorContainer;
       }
     }
@@ -878,7 +1098,9 @@ class _QuizOptionButton extends StatelessWidget {
       child: Row(
         children: [
           Expanded(child: Text(text)),
+
           if (answered && isCorrect) const Icon(Icons.check_circle_rounded),
+
           if (answered && isSelected && !isCorrect)
             const Icon(Icons.cancel_rounded),
         ],
@@ -916,7 +1138,9 @@ class _QuizResultCard extends StatelessWidget {
               Icon(
                 isCorrect ? Icons.celebration_rounded : Icons.lightbulb_rounded,
               ),
+
               const SizedBox(width: 8),
+
               Expanded(
                 child: Text(
                   isCorrect
