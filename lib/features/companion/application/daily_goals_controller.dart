@@ -7,9 +7,14 @@ enum DailyGoalType { quiz, feed, play }
 
 enum HabitatShopItem { plant, teddy, lamp, bookshelf }
 
+enum HabitatShopCategory { all, nature, toys, lighting, furniture }
+
+enum HabitatItemRarity { common, rare, epic }
+
 enum HabitatPurchaseResult {
   purchased,
   alreadyOwned,
+  locked,
   insufficientCoins,
   saveFailed,
 }
@@ -37,13 +42,19 @@ class DailyGoalsController extends ChangeNotifier {
       'companion_daily_goal_last_rewarded_date';
 
   static const String _plantOwnedKey = 'companion_shop_plant_owned';
+
   static const String _teddyOwnedKey = 'companion_shop_teddy_owned';
+
   static const String _lampOwnedKey = 'companion_shop_lamp_owned';
+
   static const String _bookshelfOwnedKey = 'companion_shop_bookshelf_owned';
 
   static const String _plantPlacedKey = 'companion_shop_plant_placed';
+
   static const String _teddyPlacedKey = 'companion_shop_teddy_placed';
+
   static const String _lampPlacedKey = 'companion_shop_lamp_placed';
+
   static const String _bookshelfPlacedKey = 'companion_shop_bookshelf_placed';
 
   final SharedPreferencesAsync _preferences;
@@ -59,6 +70,7 @@ class DailyGoalsController extends ChangeNotifier {
   String? _lastRewardedDate;
 
   final Set<HabitatShopItem> _ownedItems = <HabitatShopItem>{};
+
   final Set<HabitatShopItem> _placedItems = <HabitatShopItem>{};
 
   final Map<HabitatShopItem, Offset> _itemPositions =
@@ -99,17 +111,25 @@ class DailyGoalsController extends ChangeNotifier {
 
   int get totalGoals => 3;
 
-  double get progress => completedCount / totalGoals;
+  double get progress {
+    return completedCount / totalGoals;
+  }
 
-  bool get allCompleted => completedCount == totalGoals;
+  bool get allCompleted {
+    return completedCount == totalGoals;
+  }
 
   bool get rewardEarnedToday {
     return _lastRewardedDate == _dateValue(DateTime.now());
   }
 
-  int get ownedItemCount => _ownedItems.length;
+  int get ownedItemCount {
+    return _ownedItems.length;
+  }
 
-  int get placedItemCount => _placedItems.length;
+  int get placedItemCount {
+    return _placedItems.length;
+  }
 
   bool isOwned(HabitatShopItem item) {
     return _ownedItems.contains(item);
@@ -121,6 +141,51 @@ class DailyGoalsController extends ChangeNotifier {
 
   bool canAfford(HabitatShopItem item) {
     return _coins >= priceFor(item);
+  }
+
+  bool isUnlocked(HabitatShopItem item) {
+    if (isOwned(item)) {
+      return true;
+    }
+
+    final requiredItem = requiredOwnedItemFor(item);
+
+    if (requiredItem == null) {
+      return true;
+    }
+
+    return isOwned(requiredItem);
+  }
+
+  bool canPurchase(HabitatShopItem item) {
+    return !isOwned(item) && isUnlocked(item) && canAfford(item);
+  }
+
+  HabitatShopItem? requiredOwnedItemFor(HabitatShopItem item) {
+    return switch (item) {
+      HabitatShopItem.plant => null,
+      HabitatShopItem.teddy => HabitatShopItem.plant,
+      HabitatShopItem.lamp => HabitatShopItem.teddy,
+      HabitatShopItem.bookshelf => HabitatShopItem.lamp,
+    };
+  }
+
+  HabitatShopCategory categoryFor(HabitatShopItem item) {
+    return switch (item) {
+      HabitatShopItem.plant => HabitatShopCategory.nature,
+      HabitatShopItem.teddy => HabitatShopCategory.toys,
+      HabitatShopItem.lamp => HabitatShopCategory.lighting,
+      HabitatShopItem.bookshelf => HabitatShopCategory.furniture,
+    };
+  }
+
+  HabitatItemRarity rarityFor(HabitatShopItem item) {
+    return switch (item) {
+      HabitatShopItem.plant => HabitatItemRarity.common,
+      HabitatShopItem.teddy => HabitatItemRarity.common,
+      HabitatShopItem.lamp => HabitatItemRarity.rare,
+      HabitatShopItem.bookshelf => HabitatItemRarity.epic,
+    };
   }
 
   int priceFor(HabitatShopItem item) {
@@ -173,7 +238,9 @@ class DailyGoalsController extends ChangeNotifier {
       _lastRewardedDate = await _preferences.getString(_lastRewardedDateKey);
 
       await _loadOwnedItems();
+
       await _loadPlacedItems();
+
       await _loadItemPositions();
 
       if (storedDate == today) {
@@ -185,6 +252,7 @@ class DailyGoalsController extends ChangeNotifier {
 
         if (allCompleted) {
           _updateStreakIfNeeded(now: now);
+
           _grantDailyRewardIfNeeded(now: now);
         }
       } else {
@@ -202,6 +270,7 @@ class DailyGoalsController extends ChangeNotifier {
     }
 
     _isInitialized = true;
+
     _safeNotifyListeners();
   }
 
@@ -255,6 +324,7 @@ class DailyGoalsController extends ChangeNotifier {
 
     if (allCompleted) {
       _updateStreakIfNeeded(now: now);
+
       _grantDailyRewardIfNeeded(now: now);
     }
 
@@ -281,6 +351,10 @@ class DailyGoalsController extends ChangeNotifier {
       return HabitatPurchaseResult.alreadyOwned;
     }
 
+    if (!isUnlocked(item)) {
+      return HabitatPurchaseResult.locked;
+    }
+
     final price = priceFor(item);
 
     if (_coins < price) {
@@ -290,6 +364,7 @@ class DailyGoalsController extends ChangeNotifier {
     _coins -= price;
 
     _ownedItems.add(item);
+
     _placedItems.add(item);
 
     _safeNotifyListeners();
@@ -305,7 +380,9 @@ class DailyGoalsController extends ChangeNotifier {
       );
 
       _coins += price;
+
       _ownedItems.remove(item);
+
       _placedItems.remove(item);
 
       _safeNotifyListeners();
@@ -369,6 +446,7 @@ class DailyGoalsController extends ChangeNotifier {
     }
 
     final previousPosition = positionFor(item);
+
     final normalizedPosition = _normalizePosition(position);
 
     _itemPositions[item] = normalizedPosition;
@@ -569,6 +647,7 @@ class DailyGoalsController extends ChangeNotifier {
     }
 
     _coins += dailyCompletionReward;
+
     _lastRewardedDate = today;
   }
 
