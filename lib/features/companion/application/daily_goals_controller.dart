@@ -89,6 +89,10 @@ class DailyGoalsController extends ChangeNotifier {
       <HabitatShopItem, Offset>{};
 
   final Map<HabitatShopItem, int> _itemLayers = <HabitatShopItem, int>{};
+  final Map<HabitatShopItem, double> _itemScales = <HabitatShopItem, double>{};
+
+  final Map<HabitatShopItem, double> _itemRotations =
+      <HabitatShopItem, double>{};
 
   bool _isInitialized = false;
   bool _isDisposed = false;
@@ -324,6 +328,14 @@ class DailyGoalsController extends ChangeNotifier {
     return _itemLayers[item] ?? item.index;
   }
 
+  double scaleFor(HabitatShopItem item) {
+    return _itemScales[item] ?? 1.0;
+  }
+
+  double rotationFor(HabitatShopItem item) {
+    return _itemRotations[item] ?? 0.0;
+  }
+
   Future<void> initialize() async {
     if (_isInitialized) {
       return;
@@ -362,6 +374,7 @@ class DailyGoalsController extends ChangeNotifier {
       await _loadPlacedItems();
       await _loadItemPositions();
       await _loadItemLayers();
+      await _loadItemTransforms();
 
       _grantCollectionMilestoneRewardsIfNeeded(exposeAsLastReward: false);
 
@@ -712,6 +725,80 @@ class DailyGoalsController extends ChangeNotifier {
     }
   }
 
+  Future<bool> updateItemScale(HabitatShopItem item, double scale) async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+
+    if (!isOwned(item)) {
+      return false;
+    }
+
+    final previousScale = scaleFor(item);
+
+    final normalizedScale = scale.clamp(0.60, 1.60).toDouble();
+
+    _itemScales[item] = normalizedScale;
+
+    _safeNotifyListeners();
+
+    try {
+      await _preferences.setDouble(_scaleKey(item), normalizedScale);
+
+      return true;
+    } catch (error, stackTrace) {
+      debugPrint(
+        'Failed to save habitat item scale: '
+        '$error\n$stackTrace',
+      );
+
+      _itemScales[item] = previousScale;
+
+      _safeNotifyListeners();
+
+      return false;
+    }
+  }
+
+  Future<bool> updateItemRotation(HabitatShopItem item, double rotation) async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+
+    if (!isOwned(item)) {
+      return false;
+    }
+
+    final previousRotation = rotationFor(item);
+
+    var normalizedRotation = rotation % 1.0;
+
+    if (normalizedRotation < 0) {
+      normalizedRotation += 1.0;
+    }
+
+    _itemRotations[item] = normalizedRotation;
+
+    _safeNotifyListeners();
+
+    try {
+      await _preferences.setDouble(_rotationKey(item), normalizedRotation);
+
+      return true;
+    } catch (error, stackTrace) {
+      debugPrint(
+        'Failed to save habitat item rotation: '
+        '$error\n$stackTrace',
+      );
+
+      _itemRotations[item] = previousRotation;
+
+      _safeNotifyListeners();
+
+      return false;
+    }
+  }
+
   Future<void> resetItemPositions() async {
     if (!_isInitialized) {
       await initialize();
@@ -802,6 +889,31 @@ class DailyGoalsController extends ChangeNotifier {
       }
 
       _itemLayers[item] = layer;
+    }
+  }
+
+  Future<void> _loadItemTransforms() async {
+    _itemScales.clear();
+    _itemRotations.clear();
+
+    for (final item in HabitatShopItem.values) {
+      final scale = await _preferences.getDouble(_scaleKey(item));
+
+      final rotation = await _preferences.getDouble(_rotationKey(item));
+
+      if (scale != null) {
+        _itemScales[item] = scale.clamp(0.60, 1.60).toDouble();
+      }
+
+      if (rotation != null) {
+        var normalizedRotation = rotation % 1.0;
+
+        if (normalizedRotation < 0) {
+          normalizedRotation += 1.0;
+        }
+
+        _itemRotations[item] = normalizedRotation;
+      }
     }
   }
 
@@ -974,10 +1086,12 @@ class DailyGoalsController extends ChangeNotifier {
 
     for (final item in HabitatShopItem.values) {
       operations.add(_preferences.setBool(_ownedKey(item), isOwned(item)));
-
       operations.add(_preferences.setBool(_placedKey(item), isPlaced(item)));
-
       operations.add(_preferences.setInt(_layerKey(item), layerFor(item)));
+      operations.add(_preferences.setDouble(_scaleKey(item), scaleFor(item)));
+      operations.add(
+        _preferences.setDouble(_rotationKey(item), rotationFor(item)),
+      );
     }
 
     final lastCompletedDate = _lastCompletedDate;
@@ -1029,6 +1143,14 @@ class DailyGoalsController extends ChangeNotifier {
 
   String _layerKey(HabitatShopItem item) {
     return 'companion_shop_${item.name}_layer';
+  }
+
+  String _scaleKey(HabitatShopItem item) {
+    return 'companion_shop_${item.name}_scale';
+  }
+
+  String _rotationKey(HabitatShopItem item) {
+    return 'companion_shop_${item.name}_rotation';
   }
 
   String _dateValue(DateTime date) {

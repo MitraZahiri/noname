@@ -373,6 +373,72 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
       ..showSnackBar(SnackBar(content: Text(failureMessage)));
   }
 
+  Future<void> _scaleSelectedDecoration(double delta) async {
+    final item = _selectedHabitatItem;
+
+    if (item == null) {
+      return;
+    }
+
+    final currentScale = _dailyGoalsController.scaleFor(item);
+
+    final saved = await _dailyGoalsController.updateItemScale(
+      item,
+      currentScale + delta,
+    );
+
+    if (!mounted || saved) {
+      return;
+    }
+
+    final isTurkish = Localizations.localeOf(context).languageCode == 'tr';
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            isTurkish
+                ? 'Dekor boyutu kaydedilemedi.'
+                : 'The decoration size could not be saved.',
+          ),
+        ),
+      );
+  }
+
+  Future<void> _rotateSelectedDecoration(double delta) async {
+    final item = _selectedHabitatItem;
+
+    if (item == null) {
+      return;
+    }
+
+    final currentRotation = _dailyGoalsController.rotationFor(item);
+
+    final saved = await _dailyGoalsController.updateItemRotation(
+      item,
+      currentRotation + delta,
+    );
+
+    if (!mounted || saved) {
+      return;
+    }
+
+    final isTurkish = Localizations.localeOf(context).languageCode == 'tr';
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            isTurkish
+                ? 'Dekor dönüşü kaydedilemedi.'
+                : 'The decoration rotation could not be saved.',
+          ),
+        ),
+      );
+  }
+
   Future<void> _resetHabitatPositions() async {
     final isTurkish = Localizations.localeOf(context).languageCode == 'tr';
 
@@ -475,6 +541,18 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
                         onSendToBack: () {
                           unawaited(_moveSelectedLayer(toFront: false));
                         },
+                        onScaleDown: () {
+                          unawaited(_scaleSelectedDecoration(-0.10));
+                        },
+                        onScaleUp: () {
+                          unawaited(_scaleSelectedDecoration(0.10));
+                        },
+                        onRotateLeft: () {
+                          unawaited(_rotateSelectedDecoration(-0.125));
+                        },
+                        onRotateRight: () {
+                          unawaited(_rotateSelectedDecoration(0.125));
+                        },
                         onAction: _performAction,
                         onLearn: _openLearningQuiz,
                       ),
@@ -512,6 +590,10 @@ class _HabitatRoom extends StatelessWidget {
     required this.onDecorationSelected,
     required this.onBringToFront,
     required this.onSendToBack,
+    required this.onScaleDown,
+    required this.onScaleUp,
+    required this.onRotateLeft,
+    required this.onRotateRight,
     required this.onAction,
     required this.onLearn,
   });
@@ -535,6 +617,14 @@ class _HabitatRoom extends StatelessWidget {
   final VoidCallback onBringToFront;
 
   final VoidCallback onSendToBack;
+
+  final VoidCallback onScaleDown;
+
+  final VoidCallback onScaleUp;
+
+  final VoidCallback onRotateLeft;
+
+  final VoidCallback onRotateRight;
 
   final Future<void> Function(
     _HabitatAction action,
@@ -631,6 +721,10 @@ class _HabitatRoom extends StatelessWidget {
                     isTurkish: isTurkish,
                     onBringToFront: onBringToFront,
                     onSendToBack: onSendToBack,
+                    onScaleDown: onScaleDown,
+                    onScaleUp: onScaleUp,
+                    onRotateLeft: onRotateLeft,
+                    onRotateRight: onRotateRight,
                   ),
                 )
               else ...[
@@ -690,6 +784,10 @@ class _HabitatEditToolbar extends StatelessWidget {
     required this.isTurkish,
     required this.onBringToFront,
     required this.onSendToBack,
+    required this.onScaleDown,
+    required this.onScaleUp,
+    required this.onRotateLeft,
+    required this.onRotateRight,
   });
 
   final HabitatShopItem? selectedItem;
@@ -699,6 +797,14 @@ class _HabitatEditToolbar extends StatelessWidget {
   final VoidCallback onBringToFront;
 
   final VoidCallback onSendToBack;
+
+  final VoidCallback onScaleDown;
+
+  final VoidCallback onScaleUp;
+
+  final VoidCallback onRotateLeft;
+
+  final VoidCallback onRotateRight;
 
   @override
   Widget build(BuildContext context) {
@@ -711,16 +817,14 @@ class _HabitatEditToolbar extends StatelessWidget {
       elevation: 4,
       borderRadius: BorderRadius.circular(22),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         child:
             item == null
                 ? Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     const Icon(Icons.touch_app_rounded, size: 19),
-
                     const SizedBox(width: 8),
-
                     Flexible(
                       child: Text(
                         isTurkish
@@ -734,32 +838,68 @@ class _HabitatEditToolbar extends StatelessWidget {
                     ),
                   ],
                 )
-                : Row(
+                : Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.layers_rounded, size: 20),
-
-                    const SizedBox(width: 8),
-
-                    Expanded(
-                      child: Text(
-                        _habitatItemTitle(item, isTurkish: isTurkish),
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
+                    Row(
+                      children: [
+                        const Icon(Icons.tune_rounded, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _habitatItemTitle(item, isTurkish: isTurkish),
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelLarge
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
                         ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          IconButton.filledTonal(
+                            tooltip: isTurkish ? 'Sola döndür' : 'Rotate left',
+                            onPressed: onRotateLeft,
+                            icon: const Icon(Icons.rotate_left_rounded),
+                          ),
+                          const SizedBox(width: 4),
+                          IconButton.filledTonal(
+                            tooltip: isTurkish ? 'Küçült' : 'Make smaller',
+                            onPressed: onScaleDown,
+                            icon: const Icon(Icons.zoom_out_rounded),
+                          ),
+                          const SizedBox(width: 4),
+                          IconButton.filledTonal(
+                            tooltip: isTurkish ? 'Büyüt' : 'Make larger',
+                            onPressed: onScaleUp,
+                            icon: const Icon(Icons.zoom_in_rounded),
+                          ),
+                          const SizedBox(width: 4),
+                          IconButton.filledTonal(
+                            tooltip: isTurkish ? 'Sağa döndür' : 'Rotate right',
+                            onPressed: onRotateRight,
+                            icon: const Icon(Icons.rotate_right_rounded),
+                          ),
+                          const SizedBox(width: 12),
+                          IconButton(
+                            tooltip:
+                                isTurkish ? 'Arkaya gönder' : 'Send to back',
+                            onPressed: onSendToBack,
+                            icon: const Icon(
+                              Icons.vertical_align_bottom_rounded,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          IconButton(
+                            tooltip: isTurkish ? 'Öne getir' : 'Bring to front',
+                            onPressed: onBringToFront,
+                            icon: const Icon(Icons.vertical_align_top_rounded),
+                          ),
+                        ],
                       ),
-                    ),
-
-                    IconButton(
-                      tooltip: isTurkish ? 'Arkaya gönder' : 'Send backward',
-                      onPressed: onSendToBack,
-                      icon: const Icon(Icons.arrow_downward_rounded),
-                    ),
-
-                    IconButton(
-                      tooltip: isTurkish ? 'Öne getir' : 'Bring forward',
-                      onPressed: onBringToFront,
-                      icon: const Icon(Icons.arrow_upward_rounded),
                     ),
                   ],
                 ),
@@ -1062,20 +1202,25 @@ class _DraggableHabitatDecorationState
                       ]
                       : null,
             ),
-            child: AnimatedScale(
-              scale:
-                  _isDragging
-                      ? 1.15
-                      : widget.isSelected
-                      ? 1.05
-                      : 1,
-              duration: const Duration(milliseconds: 120),
-              child: AnimatedOpacity(
-                opacity: _isDragging ? 0.82 : 1,
+            child: AnimatedRotation(
+              turns: widget.controller.rotationFor(widget.item),
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeInOut,
+              child: AnimatedScale(
+                scale:
+                    _isDragging
+                        ? 1.15
+                        : widget.isSelected
+                        ? 1.05
+                        : 1,
                 duration: const Duration(milliseconds: 120),
-                child: Text(
-                  widget.emoji,
-                  style: TextStyle(fontSize: widget.size),
+                child: AnimatedOpacity(
+                  opacity: _isDragging ? 0.82 : 1,
+                  duration: const Duration(milliseconds: 120),
+                  child: Text(
+                    widget.emoji,
+                    style: TextStyle(fontSize: widget.size),
+                  ),
                 ),
               ),
             ),
