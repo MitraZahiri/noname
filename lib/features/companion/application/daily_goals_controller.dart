@@ -36,6 +36,13 @@ class DailyGoalsController extends ChangeNotifier {
 
   static const int dailyCompletionReward = 25;
 
+  static const Map<int, int> collectionMilestoneRewards = {
+    2: 10,
+    4: 20,
+    6: 35,
+    8: 75,
+  };
+
   static const String _dateKey = 'companion_daily_goals_date';
 
   static const String _quizKey = 'companion_daily_goal_quiz';
@@ -54,6 +61,9 @@ class DailyGoalsController extends ChangeNotifier {
   static const String _lastRewardedDateKey =
       'companion_daily_goal_last_rewarded_date';
 
+  static const String _collectionRewardTierKey =
+      'companion_collection_reward_tier';
+
   final SharedPreferencesAsync _preferences;
 
   bool _quizCompleted = false;
@@ -65,6 +75,11 @@ class DailyGoalsController extends ChangeNotifier {
 
   String? _lastCompletedDate;
   String? _lastRewardedDate;
+
+  int _collectionRewardTier = 0;
+
+  int _lastCollectionRewardAmount = 0;
+  int _lastCollectionRewardMilestone = 0;
 
   final Set<HabitatShopItem> _ownedItems = <HabitatShopItem>{};
 
@@ -87,6 +102,12 @@ class DailyGoalsController extends ChangeNotifier {
   int get streak => _streak;
 
   int get coins => _coins;
+
+  int get collectionRewardTier => _collectionRewardTier;
+
+  int get lastCollectionRewardAmount => _lastCollectionRewardAmount;
+
+  int get lastCollectionRewardMilestone => _lastCollectionRewardMilestone;
 
   int get completedCount {
     var count = 0;
@@ -126,6 +147,58 @@ class DailyGoalsController extends ChangeNotifier {
 
   int get placedItemCount {
     return _placedItems.length;
+  }
+
+  int get totalCollectionItems {
+    return HabitatShopItem.values.length;
+  }
+
+  double get collectionProgress {
+    if (totalCollectionItems == 0) {
+      return 0;
+    }
+
+    return ownedItemCount / totalCollectionItems;
+  }
+
+  bool get collectionCompleted {
+    return ownedItemCount >= totalCollectionItems;
+  }
+
+  int? get nextCollectionMilestone {
+    for (final milestone in collectionMilestoneRewards.keys) {
+      if (_collectionRewardTier < milestone) {
+        return milestone;
+      }
+    }
+
+    return null;
+  }
+
+  int get itemsUntilNextCollectionReward {
+    final milestone = nextCollectionMilestone;
+
+    if (milestone == null) {
+      return 0;
+    }
+
+    final remaining = milestone - ownedItemCount;
+
+    return remaining < 0 ? 0 : remaining;
+  }
+
+  int get nextCollectionRewardAmount {
+    final milestone = nextCollectionMilestone;
+
+    if (milestone == null) {
+      return 0;
+    }
+
+    return collectionMilestoneRewards[milestone] ?? 0;
+  }
+
+  bool isCollectionMilestoneClaimed(int milestone) {
+    return _collectionRewardTier >= milestone;
   }
 
   bool isOwned(HabitatShopItem item) {
@@ -268,6 +341,13 @@ class DailyGoalsController extends ChangeNotifier {
         _coins = 0;
       }
 
+      _collectionRewardTier =
+          await _preferences.getInt(_collectionRewardTierKey) ?? 0;
+
+      if (_collectionRewardTier < 0) {
+        _collectionRewardTier = 0;
+      }
+
       _lastCompletedDate = await _preferences.getString(_lastCompletedDateKey);
 
       _lastRewardedDate = await _preferences.getString(_lastRewardedDateKey);
@@ -275,6 +355,8 @@ class DailyGoalsController extends ChangeNotifier {
       await _loadOwnedItems();
       await _loadPlacedItems();
       await _loadItemPositions();
+
+      _grantCollectionMilestoneRewardsIfNeeded(exposeAsLastReward: false);
 
       if (storedDate == today) {
         _quizCompleted = await _preferences.getBool(_quizKey) ?? false;
@@ -380,6 +462,9 @@ class DailyGoalsController extends ChangeNotifier {
 
     await _ensureCurrentDay();
 
+    _lastCollectionRewardAmount = 0;
+    _lastCollectionRewardMilestone = 0;
+
     if (isOwned(item)) {
       return HabitatPurchaseResult.alreadyOwned;
     }
@@ -394,10 +479,15 @@ class DailyGoalsController extends ChangeNotifier {
       return HabitatPurchaseResult.insufficientCoins;
     }
 
+    final previousCoins = _coins;
+    final previousRewardTier = _collectionRewardTier;
+
     _coins -= price;
 
     _ownedItems.add(item);
     _placedItems.add(item);
+
+    _grantCollectionMilestoneRewardsIfNeeded();
 
     _safeNotifyListeners();
 
@@ -411,7 +501,12 @@ class DailyGoalsController extends ChangeNotifier {
         '$error\n$stackTrace',
       );
 
-      _coins += price;
+      _coins = previousCoins;
+
+      _collectionRewardTier = previousRewardTier;
+
+      _lastCollectionRewardAmount = 0;
+      _lastCollectionRewardMilestone = 0;
 
       _ownedItems.remove(item);
       _placedItems.remove(item);
@@ -653,6 +748,48 @@ class DailyGoalsController extends ChangeNotifier {
     _lastRewardedDate = today;
   }
 
+  void _grantCollectionMilestoneRewardsIfNeeded({
+    bool exposeAsLastReward = true,
+  }) {
+    var rewardAmount = 0;
+    var highestGrantedMilestone = _collectionRewardTier;
+
+    for (final entry in collectionMilestoneRewards.entries) {
+      final milestone = entry.key;
+
+      if (ownedItemCount < milestone) {
+        continue;
+      }
+
+      if (_collectionRewardTier >= milestone) {
+        continue;
+      }
+
+      rewardAmount += entry.value;
+
+      highestGrantedMilestone = milestone;
+    }
+
+    if (rewardAmount <= 0) {
+      if (exposeAsLastReward) {
+        _lastCollectionRewardAmount = 0;
+        _lastCollectionRewardMilestone = 0;
+      }
+
+      return;
+    }
+
+    _coins += rewardAmount;
+
+    _collectionRewardTier = highestGrantedMilestone;
+
+    if (exposeAsLastReward) {
+      _lastCollectionRewardAmount = rewardAmount;
+
+      _lastCollectionRewardMilestone = highestGrantedMilestone;
+    }
+  }
+
   Future<void> _persist({required String date}) async {
     final operations = <Future<void>>[
       _preferences.setString(_dateKey, date),
@@ -661,6 +798,7 @@ class DailyGoalsController extends ChangeNotifier {
       _preferences.setBool(_playKey, _playCompleted),
       _preferences.setInt(_streakKey, _streak),
       _preferences.setInt(_coinsKey, _coins),
+      _preferences.setInt(_collectionRewardTierKey, _collectionRewardTier),
     ];
 
     for (final item in HabitatShopItem.values) {

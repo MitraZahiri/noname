@@ -70,8 +70,8 @@ class _HabitatShopSheetState extends State<_HabitatShopSheet> {
 
                 Text(
                   isTurkish
-                      ? 'Yeni dekorların kilidini aç, koleksiyonunu büyüt ve odanı istediğin gibi düzenle.'
-                      : 'Unlock new decorations, grow your collection, and arrange your room your way.',
+                      ? 'Yeni dekorların kilidini aç, koleksiyon ödüllerini kazan ve habitatını istediğin gibi düzenle.'
+                      : 'Unlock new decorations, earn collection rewards, and arrange your habitat your way.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -80,6 +80,13 @@ class _HabitatShopSheetState extends State<_HabitatShopSheet> {
                 const SizedBox(height: 16),
 
                 _CollectionProgress(
+                  controller: controller,
+                  isTurkish: isTurkish,
+                ),
+
+                const SizedBox(height: 12),
+
+                _CollectionRewards(
                   controller: controller,
                   isTurkish: isTurkish,
                 ),
@@ -196,29 +203,39 @@ class _CollectionProgress extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
-    final total = HabitatShopItem.values.length;
-
     final owned = controller.ownedItemCount;
 
-    final progress = total == 0 ? 0.0 : owned / total;
+    final total = controller.totalCollectionItems;
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: colors.surfaceContainerLow,
+        color:
+            controller.collectionCompleted
+                ? colors.tertiaryContainer
+                : colors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
         children: [
           Row(
             children: [
-              const Icon(Icons.collections_bookmark_rounded, size: 20),
+              Icon(
+                controller.collectionCompleted
+                    ? Icons.emoji_events_rounded
+                    : Icons.collections_bookmark_rounded,
+                size: 20,
+              ),
 
               const SizedBox(width: 8),
 
               Expanded(
                 child: Text(
-                  isTurkish ? 'Koleksiyon' : 'Collection',
+                  controller.collectionCompleted
+                      ? (isTurkish
+                          ? 'Koleksiyon Tamamlandı! 🏆'
+                          : 'Collection Complete! 🏆')
+                      : (isTurkish ? 'Koleksiyon' : 'Collection'),
                   style: Theme.of(
                     context,
                   ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
@@ -238,7 +255,158 @@ class _CollectionProgress extends StatelessWidget {
 
           ClipRRect(
             borderRadius: BorderRadius.circular(20),
-            child: LinearProgressIndicator(value: progress, minHeight: 7),
+            child: LinearProgressIndicator(
+              value: controller.collectionProgress,
+              minHeight: 7,
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          if (controller.collectionCompleted)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                isTurkish
+                    ? 'Tüm habitat dekorlarını topladın. Harika iş! ✨'
+                    : 'You collected every habitat decoration. Great work! ✨',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+              ),
+            )
+          else
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                isTurkish
+                    ? 'Sonraki ödül için ${controller.itemsUntilNextCollectionReward} eşya daha • +${controller.nextCollectionRewardAmount} 🪙'
+                    : '${controller.itemsUntilNextCollectionReward} more items until the next reward • +${controller.nextCollectionRewardAmount} 🪙',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CollectionRewards extends StatelessWidget {
+  const _CollectionRewards({required this.controller, required this.isTurkish});
+
+  final DailyGoalsController controller;
+  final bool isTurkish;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: colors.outlineVariant),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.redeem_rounded, size: 19),
+
+              const SizedBox(width: 7),
+
+              Text(
+                isTurkish ? 'Koleksiyon Ödülleri' : 'Collection Rewards',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final entry
+                  in DailyGoalsController.collectionMilestoneRewards.entries)
+                _MilestoneRewardChip(
+                  milestone: entry.key,
+                  reward: entry.value,
+                  claimed: controller.isCollectionMilestoneClaimed(entry.key),
+                  reached: controller.ownedItemCount >= entry.key,
+                  isTurkish: isTurkish,
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MilestoneRewardChip extends StatelessWidget {
+  const _MilestoneRewardChip({
+    required this.milestone,
+    required this.reward,
+    required this.claimed,
+    required this.reached,
+    required this.isTurkish,
+  });
+
+  final int milestone;
+  final int reward;
+  final bool claimed;
+  final bool reached;
+  final bool isTurkish;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    final background =
+        claimed
+            ? colors.tertiaryContainer
+            : reached
+            ? colors.primaryContainer
+            : colors.surfaceContainerHighest;
+
+    final foreground =
+        claimed
+            ? colors.onTertiaryContainer
+            : reached
+            ? colors.onPrimaryContainer
+            : colors.onSurfaceVariant;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            claimed ? Icons.check_circle_rounded : Icons.lock_open_rounded,
+            size: 15,
+            color: foreground,
+          ),
+
+          const SizedBox(width: 5),
+
+          Text(
+            '$milestone/${HabitatShopItem.values.length}  •  +$reward 🪙',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: foreground,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ],
       ),
@@ -502,28 +670,53 @@ class _ShopItemCard extends StatelessWidget {
 
     final title = _itemTitle(item, isTurkish: isTurkish);
 
-    final message = switch (result) {
-      HabitatPurchaseResult.purchased =>
-        isTurkish
-            ? '$title satın alındı ve habitatına yerleştirildi! 🎉'
-            : '$title was purchased and placed in your habitat! 🎉',
+    String message;
 
-      HabitatPurchaseResult.alreadyOwned =>
-        isTurkish ? 'Bu eşyaya zaten sahipsin.' : 'You already own this item.',
+    switch (result) {
+      case HabitatPurchaseResult.purchased:
+        final bonus = controller.lastCollectionRewardAmount;
 
-      HabitatPurchaseResult.locked =>
-        isTurkish
-            ? 'Bu eşyanın kilidi henüz açılmadı.'
-            : 'This item is still locked.',
+        final milestone = controller.lastCollectionRewardMilestone;
 
-      HabitatPurchaseResult.insufficientCoins =>
-        isTurkish ? 'Yeterli coinin yok.' : 'Not enough coins.',
+        if (bonus > 0) {
+          message =
+              isTurkish
+                  ? '$title satın alındı! 🎉 Koleksiyon $milestone/${controller.totalCollectionItems}: +$bonus bonus coin kazandın! 🪙'
+                  : '$title purchased! 🎉 Collection $milestone/${controller.totalCollectionItems}: you earned +$bonus bonus coins! 🪙';
+        } else {
+          message =
+              isTurkish
+                  ? '$title satın alındı ve habitatına yerleştirildi! 🎉'
+                  : '$title was purchased and placed in your habitat! 🎉';
+        }
 
-      HabitatPurchaseResult.saveFailed =>
-        isTurkish
-            ? 'Satın alma kaydedilemedi.'
-            : 'The purchase could not be saved.',
-    };
+        break;
+
+      case HabitatPurchaseResult.alreadyOwned:
+        message =
+            isTurkish
+                ? 'Bu eşyaya zaten sahipsin.'
+                : 'You already own this item.';
+        break;
+
+      case HabitatPurchaseResult.locked:
+        message =
+            isTurkish
+                ? 'Bu eşyanın kilidi henüz açılmadı.'
+                : 'This item is still locked.';
+        break;
+
+      case HabitatPurchaseResult.insufficientCoins:
+        message = isTurkish ? 'Yeterli coinin yok.' : 'Not enough coins.';
+        break;
+
+      case HabitatPurchaseResult.saveFailed:
+        message =
+            isTurkish
+                ? 'Satın alma kaydedilemedi.'
+                : 'The purchase could not be saved.';
+        break;
+    }
 
     _showMessage(context, message);
   }
