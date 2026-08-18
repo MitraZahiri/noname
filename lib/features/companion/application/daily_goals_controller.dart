@@ -88,6 +88,8 @@ class DailyGoalsController extends ChangeNotifier {
   final Map<HabitatShopItem, Offset> _itemPositions =
       <HabitatShopItem, Offset>{};
 
+  final Map<HabitatShopItem, int> _itemLayers = <HabitatShopItem, int>{};
+
   bool _isInitialized = false;
   bool _isDisposed = false;
 
@@ -318,6 +320,10 @@ class DailyGoalsController extends ChangeNotifier {
     };
   }
 
+  int layerFor(HabitatShopItem item) {
+    return _itemLayers[item] ?? item.index;
+  }
+
   Future<void> initialize() async {
     if (_isInitialized) {
       return;
@@ -355,6 +361,7 @@ class DailyGoalsController extends ChangeNotifier {
       await _loadOwnedItems();
       await _loadPlacedItems();
       await _loadItemPositions();
+      await _loadItemLayers();
 
       _grantCollectionMilestoneRewardsIfNeeded(exposeAsLastReward: false);
 
@@ -482,10 +489,15 @@ class DailyGoalsController extends ChangeNotifier {
     final previousCoins = _coins;
     final previousRewardTier = _collectionRewardTier;
 
+    final previousLayer = _itemLayers[item];
+
+    final newLayer = _nextFrontLayer();
+
     _coins -= price;
 
     _ownedItems.add(item);
     _placedItems.add(item);
+    _itemLayers[item] = newLayer;
 
     _grantCollectionMilestoneRewardsIfNeeded();
 
@@ -510,6 +522,12 @@ class DailyGoalsController extends ChangeNotifier {
 
       _ownedItems.remove(item);
       _placedItems.remove(item);
+
+      if (previousLayer == null) {
+        _itemLayers.remove(item);
+      } else {
+        _itemLayers[item] = previousLayer;
+      }
 
       _safeNotifyListeners();
 
@@ -600,6 +618,100 @@ class DailyGoalsController extends ChangeNotifier {
     }
   }
 
+  Future<bool> bringItemToFront(HabitatShopItem item) async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+
+    if (!isOwned(item)) {
+      return false;
+    }
+
+    final currentLayer = layerFor(item);
+
+    final highestLayer = _highestOwnedLayer();
+
+    if (currentLayer >= highestLayer) {
+      return true;
+    }
+
+    final previousStoredLayer = _itemLayers[item];
+
+    final newLayer = highestLayer + 1;
+
+    _itemLayers[item] = newLayer;
+
+    _safeNotifyListeners();
+
+    try {
+      await _preferences.setInt(_layerKey(item), newLayer);
+
+      return true;
+    } catch (error, stackTrace) {
+      debugPrint(
+        'Failed to bring habitat item to front: '
+        '$error\n$stackTrace',
+      );
+
+      if (previousStoredLayer == null) {
+        _itemLayers.remove(item);
+      } else {
+        _itemLayers[item] = previousStoredLayer;
+      }
+
+      _safeNotifyListeners();
+
+      return false;
+    }
+  }
+
+  Future<bool> sendItemToBack(HabitatShopItem item) async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+
+    if (!isOwned(item)) {
+      return false;
+    }
+
+    final currentLayer = layerFor(item);
+
+    final lowestLayer = _lowestOwnedLayer();
+
+    if (currentLayer <= lowestLayer) {
+      return true;
+    }
+
+    final previousStoredLayer = _itemLayers[item];
+
+    final newLayer = lowestLayer - 1;
+
+    _itemLayers[item] = newLayer;
+
+    _safeNotifyListeners();
+
+    try {
+      await _preferences.setInt(_layerKey(item), newLayer);
+
+      return true;
+    } catch (error, stackTrace) {
+      debugPrint(
+        'Failed to send habitat item to back: '
+        '$error\n$stackTrace',
+      );
+
+      if (previousStoredLayer == null) {
+        _itemLayers.remove(item);
+      } else {
+        _itemLayers[item] = previousStoredLayer;
+      }
+
+      _safeNotifyListeners();
+
+      return false;
+    }
+  }
+
   Future<void> resetItemPositions() async {
     if (!_isInitialized) {
       await initialize();
@@ -679,6 +791,20 @@ class DailyGoalsController extends ChangeNotifier {
     }
   }
 
+  Future<void> _loadItemLayers() async {
+    _itemLayers.clear();
+
+    for (final item in HabitatShopItem.values) {
+      final layer = await _preferences.getInt(_layerKey(item));
+
+      if (layer == null) {
+        continue;
+      }
+
+      _itemLayers[item] = layer;
+    }
+  }
+
   Future<void> _ensureCurrentDay() async {
     final now = DateTime.now();
     final today = _dateValue(now);
@@ -752,6 +878,7 @@ class DailyGoalsController extends ChangeNotifier {
     bool exposeAsLastReward = true,
   }) {
     var rewardAmount = 0;
+
     var highestGrantedMilestone = _collectionRewardTier;
 
     for (final entry in collectionMilestoneRewards.entries) {
@@ -790,6 +917,50 @@ class DailyGoalsController extends ChangeNotifier {
     }
   }
 
+  int _nextFrontLayer() {
+    if (_ownedItems.isEmpty) {
+      return 0;
+    }
+
+    return _highestOwnedLayer() + 1;
+  }
+
+  int _highestOwnedLayer() {
+    if (_ownedItems.isEmpty) {
+      return 0;
+    }
+
+    var highest = layerFor(_ownedItems.first);
+
+    for (final item in _ownedItems) {
+      final layer = layerFor(item);
+
+      if (layer > highest) {
+        highest = layer;
+      }
+    }
+
+    return highest;
+  }
+
+  int _lowestOwnedLayer() {
+    if (_ownedItems.isEmpty) {
+      return 0;
+    }
+
+    var lowest = layerFor(_ownedItems.first);
+
+    for (final item in _ownedItems) {
+      final layer = layerFor(item);
+
+      if (layer < lowest) {
+        lowest = layer;
+      }
+    }
+
+    return lowest;
+  }
+
   Future<void> _persist({required String date}) async {
     final operations = <Future<void>>[
       _preferences.setString(_dateKey, date),
@@ -805,6 +976,8 @@ class DailyGoalsController extends ChangeNotifier {
       operations.add(_preferences.setBool(_ownedKey(item), isOwned(item)));
 
       operations.add(_preferences.setBool(_placedKey(item), isPlaced(item)));
+
+      operations.add(_preferences.setInt(_layerKey(item), layerFor(item)));
     }
 
     final lastCompletedDate = _lastCompletedDate;
@@ -852,6 +1025,10 @@ class DailyGoalsController extends ChangeNotifier {
 
   String _positionYKey(HabitatShopItem item) {
     return 'companion_shop_${item.name}_position_y';
+  }
+
+  String _layerKey(HabitatShopItem item) {
+    return 'companion_shop_${item.name}_layer';
   }
 
   String _dateValue(DateTime date) {
