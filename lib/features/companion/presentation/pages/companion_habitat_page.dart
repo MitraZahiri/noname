@@ -133,7 +133,9 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
     );
 
     int? selectedIndex;
+
     bool answered = false;
+
     int knowledgeReward = 0;
 
     await showModalBottomSheet<void>(
@@ -168,9 +170,8 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
                           child: Text(
                             isTurkish
                                 ? '${widget.controller.state.name} ile öğren'
-                                : 'Learn with '
-                                    '${widget.controller.state.name}',
-                            style: Theme.of(context).textTheme.titleLarge
+                                : 'Learn with ${widget.controller.state.name}',
+                            style: Theme.of(context).textTheme.headlineSmall
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                         ),
@@ -254,7 +255,9 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
                                 .prepareNextQuestion(localeCode: localeCode);
 
                             selectedIndex = null;
+
                             answered = false;
+
                             knowledgeReward = 0;
                           });
                         },
@@ -627,6 +630,33 @@ class _HabitatRoom extends StatelessWidget {
   }
 }
 
+class _HabitatDecorationSpec {
+  const _HabitatDecorationSpec({
+    required this.item,
+    required this.emoji,
+    required this.size,
+  });
+
+  final HabitatShopItem item;
+  final String emoji;
+  final double size;
+}
+
+const List<_HabitatDecorationSpec> _habitatDecorationSpecs = [
+  _HabitatDecorationSpec(item: HabitatShopItem.plant, emoji: '🪴', size: 52),
+  _HabitatDecorationSpec(item: HabitatShopItem.cactus, emoji: '🌵', size: 48),
+  _HabitatDecorationSpec(item: HabitatShopItem.teddy, emoji: '🧸', size: 48),
+  _HabitatDecorationSpec(item: HabitatShopItem.ball, emoji: '⚽', size: 42),
+  _HabitatDecorationSpec(item: HabitatShopItem.lamp, emoji: '💡', size: 42),
+  _HabitatDecorationSpec(item: HabitatShopItem.lantern, emoji: '🏮', size: 44),
+  _HabitatDecorationSpec(
+    item: HabitatShopItem.bookshelf,
+    emoji: '📚',
+    size: 48,
+  ),
+  _HabitatDecorationSpec(item: HabitatShopItem.chair, emoji: '🪑', size: 52),
+];
+
 class _PlacedHabitatDecorations extends StatelessWidget {
   const _PlacedHabitatDecorations({
     required this.controller,
@@ -648,53 +678,18 @@ class _PlacedHabitatDecorations extends StatelessWidget {
 
         return Stack(
           children: [
-            if (controller.isPlaced(HabitatShopItem.plant))
-              _DraggableHabitatDecoration(
-                key: const ValueKey('habitat-plant'),
-                controller: controller,
-                item: HabitatShopItem.plant,
-                emoji: '🪴',
-                size: 52,
-                roomSize: roomSize,
-                isTurkish: isTurkish,
-                isEditing: isEditing,
-              ),
-
-            if (controller.isPlaced(HabitatShopItem.teddy))
-              _DraggableHabitatDecoration(
-                key: const ValueKey('habitat-teddy'),
-                controller: controller,
-                item: HabitatShopItem.teddy,
-                emoji: '🧸',
-                size: 48,
-                roomSize: roomSize,
-                isTurkish: isTurkish,
-                isEditing: isEditing,
-              ),
-
-            if (controller.isPlaced(HabitatShopItem.lamp))
-              _DraggableHabitatDecoration(
-                key: const ValueKey('habitat-lamp'),
-                controller: controller,
-                item: HabitatShopItem.lamp,
-                emoji: '💡',
-                size: 42,
-                roomSize: roomSize,
-                isTurkish: isTurkish,
-                isEditing: isEditing,
-              ),
-
-            if (controller.isPlaced(HabitatShopItem.bookshelf))
-              _DraggableHabitatDecoration(
-                key: const ValueKey('habitat-bookshelf'),
-                controller: controller,
-                item: HabitatShopItem.bookshelf,
-                emoji: '📚',
-                size: 48,
-                roomSize: roomSize,
-                isTurkish: isTurkish,
-                isEditing: isEditing,
-              ),
+            for (final spec in _habitatDecorationSpecs)
+              if (controller.isPlaced(spec.item))
+                _DraggableHabitatDecoration(
+                  key: ValueKey('habitat-${spec.item.name}'),
+                  controller: controller,
+                  item: spec.item,
+                  emoji: spec.emoji,
+                  size: spec.size,
+                  roomSize: roomSize,
+                  isTurkish: isTurkish,
+                  isEditing: isEditing,
+                ),
           ],
         );
       },
@@ -810,13 +805,11 @@ class _DraggableHabitatDecorationState
         ignoring: !widget.isEditing,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-
           onPanStart: (_) {
             setState(() {
               _isDragging = true;
             });
           },
-
           onPanUpdate: (details) {
             final nextX = _position.dx + (details.delta.dx / _usableWidth);
 
@@ -829,7 +822,6 @@ class _DraggableHabitatDecorationState
               );
             });
           },
-
           onPanCancel: () {
             setState(() {
               _isDragging = false;
@@ -837,7 +829,6 @@ class _DraggableHabitatDecorationState
               _position = widget.controller.positionFor(widget.item);
             });
           },
-
           onPanEnd: (_) {
             final newPosition = _position;
 
@@ -847,7 +838,6 @@ class _DraggableHabitatDecorationState
 
             unawaited(_savePosition(newPosition));
           },
-
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             width: _decorationExtent,
@@ -1054,10 +1044,8 @@ class _DailyGoalsCard extends StatelessWidget {
               else
                 Text(
                   isTurkish
-                      ? 'Tüm görevleri tamamla ve '
-                          '${DailyGoalsController.dailyCompletionReward} 🪙 kazan.'
-                      : 'Complete all goals and earn '
-                          '${DailyGoalsController.dailyCompletionReward} 🪙.',
+                      ? 'Tüm görevleri tamamla ve ${DailyGoalsController.dailyCompletionReward} 🪙 kazan.'
+                      : 'Complete all goals and earn ${DailyGoalsController.dailyCompletionReward} 🪙.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: colors.onSurfaceVariant,
                   ),
@@ -1289,13 +1277,17 @@ class _CompanionCharacter extends StatelessWidget {
   Widget build(BuildContext context) {
     final scale = switch (action) {
       _HabitatAction.feeding => 1.10,
+
       _HabitatAction.playing => 1.08,
+
       _HabitatAction.resting => 0.90,
+
       _HabitatAction.none => 1.0,
     };
 
     final turns = switch (action) {
       _HabitatAction.playing => 0.035,
+
       _ => 0.0,
     };
 

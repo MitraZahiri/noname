@@ -70,8 +70,8 @@ class _HabitatShopSheetState extends State<_HabitatShopSheet> {
 
                 Text(
                   isTurkish
-                      ? 'Eşyaları sırayla aç, koleksiyonunu büyüt ve habitatını düzenle.'
-                      : 'Unlock items in order, grow your collection, and customize your habitat.',
+                      ? 'Yeni dekorların kilidini aç, koleksiyonunu büyüt ve odanı istediğin gibi düzenle.'
+                      : 'Unlock new decorations, grow your collection, and arrange your room your way.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -197,6 +197,7 @@ class _CollectionProgress extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
 
     final total = HabitatShopItem.values.length;
+
     final owned = controller.ownedItemCount;
 
     final progress = total == 0 ? 0.0 : owned / total;
@@ -253,7 +254,9 @@ class _CategoryFilters extends StatelessWidget {
   });
 
   final HabitatShopCategory selectedCategory;
+
   final bool isTurkish;
+
   final ValueChanged<HabitatShopCategory> onSelected;
 
   @override
@@ -294,6 +297,7 @@ class _CategoryChip extends StatelessWidget {
   final HabitatShopCategory category;
   final bool selected;
   final bool isTurkish;
+
   final ValueChanged<HabitatShopCategory> onSelected;
 
   @override
@@ -311,9 +315,13 @@ class _CategoryChip extends StatelessWidget {
   IconData _iconForCategory(HabitatShopCategory category) {
     return switch (category) {
       HabitatShopCategory.all => Icons.grid_view_rounded,
+
       HabitatShopCategory.nature => Icons.local_florist_rounded,
+
       HabitatShopCategory.toys => Icons.toys_rounded,
+
       HabitatShopCategory.lighting => Icons.lightbulb_rounded,
+
       HabitatShopCategory.furniture => Icons.chair_rounded,
     };
   }
@@ -321,9 +329,13 @@ class _CategoryChip extends StatelessWidget {
   String _labelForCategory(HabitatShopCategory category) {
     return switch (category) {
       HabitatShopCategory.all => isTurkish ? 'Tümü' : 'All',
+
       HabitatShopCategory.nature => isTurkish ? 'Doğa' : 'Nature',
+
       HabitatShopCategory.toys => isTurkish ? 'Oyuncak' : 'Toys',
+
       HabitatShopCategory.lighting => isTurkish ? 'Işık' : 'Lighting',
+
       HabitatShopCategory.furniture => isTurkish ? 'Mobilya' : 'Furniture',
     };
   }
@@ -345,10 +357,15 @@ class _ShopItemCard extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
 
     final price = controller.priceFor(item);
+
     final owned = controller.isOwned(item);
+
     final placed = controller.isPlaced(item);
+
     final unlocked = controller.isUnlocked(item);
+
     final affordable = controller.canAfford(item);
+
     final rarity = controller.rarityFor(item);
 
     return Card(
@@ -359,9 +376,10 @@ class _ShopItemCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.all(14),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 _ItemEmojiBox(
-                  emoji: _emojiFor(item),
+                  emoji: _itemEmoji(item),
                   unlocked: unlocked,
                   placed: placed,
                 ),
@@ -376,7 +394,7 @@ class _ShopItemCard extends StatelessWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              _titleFor(item),
+                              _itemTitle(item, isTurkish: isTurkish),
                               style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(fontWeight: FontWeight.bold),
                             ),
@@ -391,7 +409,7 @@ class _ShopItemCard extends StatelessWidget {
                       const SizedBox(height: 5),
 
                       Text(
-                        _descriptionFor(item),
+                        _itemDescription(item, isTurkish: isTurkish),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: colors.onSurfaceVariant,
                         ),
@@ -482,11 +500,13 @@ class _ShopItemCard extends StatelessWidget {
       return;
     }
 
+    final title = _itemTitle(item, isTurkish: isTurkish);
+
     final message = switch (result) {
       HabitatPurchaseResult.purchased =>
         isTurkish
-            ? '${_titleFor(item)} satın alındı ve habitatına yerleştirildi! 🎉'
-            : '${_titleFor(item)} was purchased and placed in your habitat! 🎉',
+            ? '$title satın alındı ve habitatına yerleştirildi! 🎉'
+            : '$title was purchased and placed in your habitat! 🎉',
 
       HabitatPurchaseResult.alreadyOwned =>
         isTurkish ? 'Bu eşyaya zaten sahipsin.' : 'You already own this item.',
@@ -515,16 +535,18 @@ class _ShopItemCard extends StatelessWidget {
       return;
     }
 
+    final title = _itemTitle(item, isTurkish: isTurkish);
+
     final message = switch (result) {
       HabitatPlacementResult.placed =>
         isTurkish
-            ? '${_titleFor(item)} habitatına yerleştirildi.'
-            : '${_titleFor(item)} was placed in your habitat.',
+            ? '$title habitatına yerleştirildi.'
+            : '$title was placed in your habitat.',
 
       HabitatPlacementResult.removed =>
         isTurkish
-            ? '${_titleFor(item)} habitattan kaldırıldı.'
-            : '${_titleFor(item)} was removed from your habitat.',
+            ? '$title habitattan kaldırıldı.'
+            : '$title was removed from your habitat.',
 
       HabitatPlacementResult.notOwned =>
         isTurkish
@@ -544,51 +566,6 @@ class _ShopItemCard extends StatelessWidget {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  String _emojiFor(HabitatShopItem item) {
-    return switch (item) {
-      HabitatShopItem.plant => '🪴',
-      HabitatShopItem.teddy => '🧸',
-      HabitatShopItem.lamp => '💡',
-      HabitatShopItem.bookshelf => '📚',
-    };
-  }
-
-  String _titleFor(HabitatShopItem item) {
-    return switch (item) {
-      HabitatShopItem.plant => isTurkish ? 'Bitki' : 'Plant',
-
-      HabitatShopItem.teddy => isTurkish ? 'Oyuncak Ayı' : 'Teddy Bear',
-
-      HabitatShopItem.lamp => isTurkish ? 'Lamba' : 'Lamp',
-
-      HabitatShopItem.bookshelf => isTurkish ? 'Kitaplık' : 'Bookshelf',
-    };
-  }
-
-  String _descriptionFor(HabitatShopItem item) {
-    return switch (item) {
-      HabitatShopItem.plant =>
-        isTurkish
-            ? 'Habitatın içine biraz doğa ekler.'
-            : 'Adds a little nature to the habitat.',
-
-      HabitatShopItem.teddy =>
-        isTurkish
-            ? 'Mimo için sevimli bir oyuncak.'
-            : 'A cute toy for your companion.',
-
-      HabitatShopItem.lamp =>
-        isTurkish
-            ? 'Habitatı daha sıcak ve rahat gösterir.'
-            : 'Makes the habitat feel warmer and cozier.',
-
-      HabitatShopItem.bookshelf =>
-        isTurkish
-            ? 'Bilginin habitatta da bir yeri olsun.'
-            : 'Give knowledge a place in the habitat.',
-    };
   }
 }
 
@@ -640,13 +617,17 @@ class _RarityBadge extends StatelessWidget {
 
     final backgroundColor = switch (rarity) {
       HabitatItemRarity.common => colors.secondaryContainer,
+
       HabitatItemRarity.rare => colors.tertiaryContainer,
+
       HabitatItemRarity.epic => colors.primaryContainer,
     };
 
     final foregroundColor = switch (rarity) {
       HabitatItemRarity.common => colors.onSecondaryContainer,
+
       HabitatItemRarity.rare => colors.onTertiaryContainer,
+
       HabitatItemRarity.epic => colors.onPrimaryContainer,
     };
 
@@ -660,7 +641,9 @@ class _RarityBadge extends StatelessWidget {
 
     final icon = switch (rarity) {
       HabitatItemRarity.common => Icons.circle_rounded,
+
       HabitatItemRarity.rare => Icons.star_rounded,
+
       HabitatItemRarity.epic => Icons.auto_awesome_rounded,
     };
 
@@ -703,7 +686,10 @@ class _LockedRequirement extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
-    final requiredName = _requiredName();
+    final requiredName =
+        requiredItem == null
+            ? ''
+            : _itemTitle(requiredItem!, isTurkish: isTurkish);
 
     return Row(
       children: [
@@ -726,20 +712,6 @@ class _LockedRequirement extends StatelessWidget {
         ),
       ],
     );
-  }
-
-  String _requiredName() {
-    return switch (requiredItem) {
-      HabitatShopItem.plant => isTurkish ? 'Bitki' : 'Plant',
-
-      HabitatShopItem.teddy => isTurkish ? 'Oyuncak Ayı' : 'Teddy Bear',
-
-      HabitatShopItem.lamp => isTurkish ? 'Lamba' : 'Lamp',
-
-      HabitatShopItem.bookshelf => isTurkish ? 'Kitaplık' : 'Bookshelf',
-
-      null => '',
-    };
   }
 }
 
@@ -905,4 +877,81 @@ class _EmptyCategory extends StatelessWidget {
       ),
     );
   }
+}
+
+String _itemEmoji(HabitatShopItem item) {
+  return switch (item) {
+    HabitatShopItem.plant => '🪴',
+    HabitatShopItem.cactus => '🌵',
+    HabitatShopItem.teddy => '🧸',
+    HabitatShopItem.ball => '⚽',
+    HabitatShopItem.lamp => '💡',
+    HabitatShopItem.lantern => '🏮',
+    HabitatShopItem.bookshelf => '📚',
+    HabitatShopItem.chair => '🪑',
+  };
+}
+
+String _itemTitle(HabitatShopItem item, {required bool isTurkish}) {
+  return switch (item) {
+    HabitatShopItem.plant => isTurkish ? 'Bitki' : 'Plant',
+
+    HabitatShopItem.cactus => isTurkish ? 'Kaktüs' : 'Cactus',
+
+    HabitatShopItem.teddy => isTurkish ? 'Oyuncak Ayı' : 'Teddy Bear',
+
+    HabitatShopItem.ball => isTurkish ? 'Top' : 'Ball',
+
+    HabitatShopItem.lamp => isTurkish ? 'Lamba' : 'Lamp',
+
+    HabitatShopItem.lantern => isTurkish ? 'Fener' : 'Lantern',
+
+    HabitatShopItem.bookshelf => isTurkish ? 'Kitaplık' : 'Bookshelf',
+
+    HabitatShopItem.chair => isTurkish ? 'Sandalye' : 'Chair',
+  };
+}
+
+String _itemDescription(HabitatShopItem item, {required bool isTurkish}) {
+  return switch (item) {
+    HabitatShopItem.plant =>
+      isTurkish
+          ? 'Habitatın içine biraz doğa ekler.'
+          : 'Adds a little nature to the habitat.',
+
+    HabitatShopItem.cactus =>
+      isTurkish
+          ? 'Az bakım isteyen sevimli bir kaktüs.'
+          : 'A cute cactus that needs very little care.',
+
+    HabitatShopItem.teddy =>
+      isTurkish
+          ? 'Arkadaşın için yumuşacık bir oyuncak.'
+          : 'A soft little toy for your companion.',
+
+    HabitatShopItem.ball =>
+      isTurkish
+          ? 'Oyun zamanı için renkli bir top.'
+          : 'A fun ball for playtime.',
+
+    HabitatShopItem.lamp =>
+      isTurkish
+          ? 'Habitatı daha sıcak ve rahat gösterir.'
+          : 'Makes the habitat feel warmer and cozier.',
+
+    HabitatShopItem.lantern =>
+      isTurkish
+          ? 'Odaya farklı ve sıcak bir ışık katar.'
+          : 'Adds a warm and unique glow to the room.',
+
+    HabitatShopItem.bookshelf =>
+      isTurkish
+          ? 'Bilginin habitatta da bir yeri olsun.'
+          : 'Give knowledge a place in the habitat.',
+
+    HabitatShopItem.chair =>
+      isTurkish
+          ? 'Habitat için rahat ve şık bir sandalye.'
+          : 'A comfortable and stylish chair for the habitat.',
+  };
 }

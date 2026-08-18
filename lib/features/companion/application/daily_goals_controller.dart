@@ -5,7 +5,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 enum DailyGoalType { quiz, feed, play }
 
-enum HabitatShopItem { plant, teddy, lamp, bookshelf }
+enum HabitatShopItem {
+  plant,
+  cactus,
+  teddy,
+  ball,
+  lamp,
+  lantern,
+  bookshelf,
+  chair,
+}
 
 enum HabitatShopCategory { all, nature, toys, lighting, furniture }
 
@@ -28,9 +37,13 @@ class DailyGoalsController extends ChangeNotifier {
   static const int dailyCompletionReward = 25;
 
   static const String _dateKey = 'companion_daily_goals_date';
+
   static const String _quizKey = 'companion_daily_goal_quiz';
+
   static const String _feedKey = 'companion_daily_goal_feed';
+
   static const String _playKey = 'companion_daily_goal_play';
+
   static const String _streakKey = 'companion_daily_goal_streak';
 
   static const String _lastCompletedDateKey =
@@ -40,22 +53,6 @@ class DailyGoalsController extends ChangeNotifier {
 
   static const String _lastRewardedDateKey =
       'companion_daily_goal_last_rewarded_date';
-
-  static const String _plantOwnedKey = 'companion_shop_plant_owned';
-
-  static const String _teddyOwnedKey = 'companion_shop_teddy_owned';
-
-  static const String _lampOwnedKey = 'companion_shop_lamp_owned';
-
-  static const String _bookshelfOwnedKey = 'companion_shop_bookshelf_owned';
-
-  static const String _plantPlacedKey = 'companion_shop_plant_placed';
-
-  static const String _teddyPlacedKey = 'companion_shop_teddy_placed';
-
-  static const String _lampPlacedKey = 'companion_shop_lamp_placed';
-
-  static const String _bookshelfPlacedKey = 'companion_shop_bookshelf_placed';
 
   final SharedPreferencesAsync _preferences;
 
@@ -164,26 +161,49 @@ class DailyGoalsController extends ChangeNotifier {
   HabitatShopItem? requiredOwnedItemFor(HabitatShopItem item) {
     return switch (item) {
       HabitatShopItem.plant => null,
+
+      HabitatShopItem.cactus => HabitatShopItem.plant,
+
       HabitatShopItem.teddy => HabitatShopItem.plant,
+
+      HabitatShopItem.ball => HabitatShopItem.teddy,
+
       HabitatShopItem.lamp => HabitatShopItem.teddy,
+
+      HabitatShopItem.lantern => HabitatShopItem.lamp,
+
       HabitatShopItem.bookshelf => HabitatShopItem.lamp,
+
+      HabitatShopItem.chair => HabitatShopItem.bookshelf,
     };
   }
 
   HabitatShopCategory categoryFor(HabitatShopItem item) {
     return switch (item) {
-      HabitatShopItem.plant => HabitatShopCategory.nature,
-      HabitatShopItem.teddy => HabitatShopCategory.toys,
-      HabitatShopItem.lamp => HabitatShopCategory.lighting,
-      HabitatShopItem.bookshelf => HabitatShopCategory.furniture,
+      HabitatShopItem.plant ||
+      HabitatShopItem.cactus => HabitatShopCategory.nature,
+
+      HabitatShopItem.teddy || HabitatShopItem.ball => HabitatShopCategory.toys,
+
+      HabitatShopItem.lamp ||
+      HabitatShopItem.lantern => HabitatShopCategory.lighting,
+
+      HabitatShopItem.bookshelf ||
+      HabitatShopItem.chair => HabitatShopCategory.furniture,
     };
   }
 
   HabitatItemRarity rarityFor(HabitatShopItem item) {
     return switch (item) {
-      HabitatShopItem.plant => HabitatItemRarity.common,
-      HabitatShopItem.teddy => HabitatItemRarity.common,
-      HabitatShopItem.lamp => HabitatItemRarity.rare,
+      HabitatShopItem.plant ||
+      HabitatShopItem.cactus ||
+      HabitatShopItem.teddy ||
+      HabitatShopItem.ball => HabitatItemRarity.common,
+
+      HabitatShopItem.lamp ||
+      HabitatShopItem.lantern ||
+      HabitatShopItem.chair => HabitatItemRarity.rare,
+
       HabitatShopItem.bookshelf => HabitatItemRarity.epic,
     };
   }
@@ -191,9 +211,13 @@ class DailyGoalsController extends ChangeNotifier {
   int priceFor(HabitatShopItem item) {
     return switch (item) {
       HabitatShopItem.plant => 20,
+      HabitatShopItem.cactus => 28,
       HabitatShopItem.teddy => 35,
+      HabitatShopItem.ball => 42,
       HabitatShopItem.lamp => 50,
+      HabitatShopItem.lantern => 60,
       HabitatShopItem.bookshelf => 75,
+      HabitatShopItem.chair => 90,
     };
   }
 
@@ -203,10 +227,21 @@ class DailyGoalsController extends ChangeNotifier {
 
   Offset defaultPositionFor(HabitatShopItem item) {
     return switch (item) {
-      HabitatShopItem.plant => const Offset(0.02, 1.0),
-      HabitatShopItem.teddy => const Offset(0.98, 1.0),
+      HabitatShopItem.plant => const Offset(0.02, 1.00),
+
+      HabitatShopItem.cactus => const Offset(0.20, 0.88),
+
+      HabitatShopItem.teddy => const Offset(0.98, 1.00),
+
+      HabitatShopItem.ball => const Offset(0.80, 0.88),
+
       HabitatShopItem.lamp => const Offset(0.05, 0.10),
+
+      HabitatShopItem.lantern => const Offset(0.28, 0.08),
+
       HabitatShopItem.bookshelf => const Offset(0.95, 0.12),
+
+      HabitatShopItem.chair => const Offset(0.78, 0.52),
     };
   }
 
@@ -238,9 +273,7 @@ class DailyGoalsController extends ChangeNotifier {
       _lastRewardedDate = await _preferences.getString(_lastRewardedDateKey);
 
       await _loadOwnedItems();
-
       await _loadPlacedItems();
-
       await _loadItemPositions();
 
       if (storedDate == today) {
@@ -364,7 +397,6 @@ class DailyGoalsController extends ChangeNotifier {
     _coins -= price;
 
     _ownedItems.add(item);
-
     _placedItems.add(item);
 
     _safeNotifyListeners();
@@ -382,7 +414,6 @@ class DailyGoalsController extends ChangeNotifier {
       _coins += price;
 
       _ownedItems.remove(item);
-
       _placedItems.remove(item);
 
       _safeNotifyListeners();
@@ -512,57 +543,28 @@ class DailyGoalsController extends ChangeNotifier {
   Future<void> _loadOwnedItems() async {
     _ownedItems.clear();
 
-    final plantOwned = await _preferences.getBool(_plantOwnedKey) ?? false;
+    for (final item in HabitatShopItem.values) {
+      final owned = await _preferences.getBool(_ownedKey(item)) ?? false;
 
-    final teddyOwned = await _preferences.getBool(_teddyOwnedKey) ?? false;
-
-    final lampOwned = await _preferences.getBool(_lampOwnedKey) ?? false;
-
-    final bookshelfOwned =
-        await _preferences.getBool(_bookshelfOwnedKey) ?? false;
-
-    if (plantOwned) {
-      _ownedItems.add(HabitatShopItem.plant);
-    }
-
-    if (teddyOwned) {
-      _ownedItems.add(HabitatShopItem.teddy);
-    }
-
-    if (lampOwned) {
-      _ownedItems.add(HabitatShopItem.lamp);
-    }
-
-    if (bookshelfOwned) {
-      _ownedItems.add(HabitatShopItem.bookshelf);
+      if (owned) {
+        _ownedItems.add(item);
+      }
     }
   }
 
   Future<void> _loadPlacedItems() async {
     _placedItems.clear();
 
-    final plantPlaced = await _preferences.getBool(_plantPlacedKey);
+    for (final item in HabitatShopItem.values) {
+      if (!isOwned(item)) {
+        continue;
+      }
 
-    final teddyPlaced = await _preferences.getBool(_teddyPlacedKey);
+      final placed = await _preferences.getBool(_placedKey(item));
 
-    final lampPlaced = await _preferences.getBool(_lampPlacedKey);
-
-    final bookshelfPlaced = await _preferences.getBool(_bookshelfPlacedKey);
-
-    if (isOwned(HabitatShopItem.plant) && (plantPlaced ?? true)) {
-      _placedItems.add(HabitatShopItem.plant);
-    }
-
-    if (isOwned(HabitatShopItem.teddy) && (teddyPlaced ?? true)) {
-      _placedItems.add(HabitatShopItem.teddy);
-    }
-
-    if (isOwned(HabitatShopItem.lamp) && (lampPlaced ?? true)) {
-      _placedItems.add(HabitatShopItem.lamp);
-    }
-
-    if (isOwned(HabitatShopItem.bookshelf) && (bookshelfPlaced ?? true)) {
-      _placedItems.add(HabitatShopItem.bookshelf);
+      if (placed ?? true) {
+        _placedItems.add(item);
+      }
     }
   }
 
@@ -659,21 +661,13 @@ class DailyGoalsController extends ChangeNotifier {
       _preferences.setBool(_playKey, _playCompleted),
       _preferences.setInt(_streakKey, _streak),
       _preferences.setInt(_coinsKey, _coins),
-      _preferences.setBool(_plantOwnedKey, isOwned(HabitatShopItem.plant)),
-      _preferences.setBool(_teddyOwnedKey, isOwned(HabitatShopItem.teddy)),
-      _preferences.setBool(_lampOwnedKey, isOwned(HabitatShopItem.lamp)),
-      _preferences.setBool(
-        _bookshelfOwnedKey,
-        isOwned(HabitatShopItem.bookshelf),
-      ),
-      _preferences.setBool(_plantPlacedKey, isPlaced(HabitatShopItem.plant)),
-      _preferences.setBool(_teddyPlacedKey, isPlaced(HabitatShopItem.teddy)),
-      _preferences.setBool(_lampPlacedKey, isPlaced(HabitatShopItem.lamp)),
-      _preferences.setBool(
-        _bookshelfPlacedKey,
-        isPlaced(HabitatShopItem.bookshelf),
-      ),
     ];
+
+    for (final item in HabitatShopItem.values) {
+      operations.add(_preferences.setBool(_ownedKey(item), isOwned(item)));
+
+      operations.add(_preferences.setBool(_placedKey(item), isPlaced(item)));
+    }
 
     final lastCompletedDate = _lastCompletedDate;
 
@@ -704,6 +698,14 @@ class DailyGoalsController extends ChangeNotifier {
 
   double _clampUnit(double value) {
     return value.clamp(0.0, 1.0).toDouble();
+  }
+
+  String _ownedKey(HabitatShopItem item) {
+    return 'companion_shop_${item.name}_owned';
+  }
+
+  String _placedKey(HabitatShopItem item) {
+    return 'companion_shop_${item.name}_placed';
   }
 
   String _positionXKey(HabitatShopItem item) {
