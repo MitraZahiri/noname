@@ -31,6 +31,8 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
 
   bool _isEditingHabitat = false;
 
+  HabitatShopItem? _selectedHabitatItem;
+
   late final DailyGoalsController _dailyGoalsController;
 
   @override
@@ -171,7 +173,7 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
                             isTurkish
                                 ? '${widget.controller.state.name} ile öğren'
                                 : 'Learn with ${widget.controller.state.name}',
-                            style: Theme.of(context).textTheme.headlineSmall
+                            style: Theme.of(context).textTheme.titleLarge
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                         ),
@@ -316,7 +318,125 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
 
     setState(() {
       _isEditingHabitat = !_isEditingHabitat;
+
+      if (!_isEditingHabitat) {
+        _selectedHabitatItem = null;
+      }
     });
+  }
+
+  void _selectHabitatItem(HabitatShopItem item) {
+    if (!_isEditingHabitat) {
+      return;
+    }
+
+    if (_selectedHabitatItem == item) {
+      return;
+    }
+
+    setState(() {
+      _selectedHabitatItem = item;
+    });
+  }
+
+  Future<void> _moveSelectedLayer({required bool toFront}) async {
+    final item = _selectedHabitatItem;
+
+    if (item == null) {
+      return;
+    }
+
+    final isTurkish = Localizations.localeOf(context).languageCode == 'tr';
+
+    final messenger = ScaffoldMessenger.of(context);
+
+    final failureMessage =
+        isTurkish
+            ? 'Dekor katmanı kaydedilemedi.'
+            : 'The decoration layer could not be saved.';
+
+    final saved =
+        toFront
+            ? await _dailyGoalsController.bringItemToFront(item)
+            : await _dailyGoalsController.sendItemToBack(item);
+
+    if (!mounted) {
+      return;
+    }
+
+    if (saved) {
+      return;
+    }
+
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(failureMessage)));
+  }
+
+  Future<void> _scaleSelectedDecoration(double delta) async {
+    final item = _selectedHabitatItem;
+
+    if (item == null) {
+      return;
+    }
+
+    final currentScale = _dailyGoalsController.scaleFor(item);
+
+    final saved = await _dailyGoalsController.updateItemScale(
+      item,
+      currentScale + delta,
+    );
+
+    if (!mounted || saved) {
+      return;
+    }
+
+    final isTurkish = Localizations.localeOf(context).languageCode == 'tr';
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            isTurkish
+                ? 'Dekor boyutu kaydedilemedi.'
+                : 'The decoration size could not be saved.',
+          ),
+        ),
+      );
+  }
+
+  Future<void> _rotateSelectedDecoration(double delta) async {
+    final item = _selectedHabitatItem;
+
+    if (item == null) {
+      return;
+    }
+
+    final currentRotation = _dailyGoalsController.rotationFor(item);
+
+    final saved = await _dailyGoalsController.updateItemRotation(
+      item,
+      currentRotation + delta,
+    );
+
+    if (!mounted || saved) {
+      return;
+    }
+
+    final isTurkish = Localizations.localeOf(context).languageCode == 'tr';
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            isTurkish
+                ? 'Dekor dönüşü kaydedilemedi.'
+                : 'The decoration rotation could not be saved.',
+          ),
+        ),
+      );
   }
 
   Future<void> _resetHabitatPositions() async {
@@ -413,6 +533,26 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
                         action: _action,
                         isTurkish: isTurkish,
                         isEditing: _isEditingHabitat,
+                        selectedItem: _selectedHabitatItem,
+                        onDecorationSelected: _selectHabitatItem,
+                        onBringToFront: () {
+                          unawaited(_moveSelectedLayer(toFront: true));
+                        },
+                        onSendToBack: () {
+                          unawaited(_moveSelectedLayer(toFront: false));
+                        },
+                        onScaleDown: () {
+                          unawaited(_scaleSelectedDecoration(-0.10));
+                        },
+                        onScaleUp: () {
+                          unawaited(_scaleSelectedDecoration(0.10));
+                        },
+                        onRotateLeft: () {
+                          unawaited(_rotateSelectedDecoration(-0.125));
+                        },
+                        onRotateRight: () {
+                          unawaited(_rotateSelectedDecoration(0.125));
+                        },
                         onAction: _performAction,
                         onLearn: _openLearningQuiz,
                       ),
@@ -446,6 +586,14 @@ class _HabitatRoom extends StatelessWidget {
     required this.action,
     required this.isTurkish,
     required this.isEditing,
+    required this.selectedItem,
+    required this.onDecorationSelected,
+    required this.onBringToFront,
+    required this.onSendToBack,
+    required this.onScaleDown,
+    required this.onScaleUp,
+    required this.onRotateLeft,
+    required this.onRotateRight,
     required this.onAction,
     required this.onLearn,
   });
@@ -461,6 +609,22 @@ class _HabitatRoom extends StatelessWidget {
   final bool isTurkish;
 
   final bool isEditing;
+
+  final HabitatShopItem? selectedItem;
+
+  final ValueChanged<HabitatShopItem> onDecorationSelected;
+
+  final VoidCallback onBringToFront;
+
+  final VoidCallback onSendToBack;
+
+  final VoidCallback onScaleDown;
+
+  final VoidCallback onScaleUp;
+
+  final VoidCallback onRotateLeft;
+
+  final VoidCallback onRotateRight;
 
   final Future<void> Function(
     _HabitatAction action,
@@ -534,6 +698,8 @@ class _HabitatRoom extends StatelessWidget {
                   controller: rewardsController,
                   isTurkish: isTurkish,
                   isEditing: isEditing,
+                  selectedItem: selectedItem,
+                  onSelected: onDecorationSelected,
                 ),
               ),
 
@@ -547,36 +713,18 @@ class _HabitatRoom extends StatelessWidget {
 
               if (isEditing)
                 Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 20,
-                  child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: colors.surface.withValues(alpha: 0.90),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.open_with_rounded, size: 18),
-
-                          const SizedBox(width: 7),
-
-                          Text(
-                            isTurkish
-                                ? 'Dekorları sürükleyerek yerleştir'
-                                : 'Drag decorations to arrange',
-                            style: Theme.of(context).textTheme.labelMedium
-                                ?.copyWith(fontWeight: FontWeight.w600),
-                          ),
-                        ],
-                      ),
-                    ),
+                  left: 12,
+                  right: 12,
+                  bottom: 18,
+                  child: _HabitatEditToolbar(
+                    selectedItem: selectedItem,
+                    isTurkish: isTurkish,
+                    onBringToFront: onBringToFront,
+                    onSendToBack: onSendToBack,
+                    onScaleDown: onScaleDown,
+                    onScaleUp: onScaleUp,
+                    onRotateLeft: onRotateLeft,
+                    onRotateRight: onRotateRight,
                   ),
                 )
               else ...[
@@ -630,6 +778,136 @@ class _HabitatRoom extends StatelessWidget {
   }
 }
 
+class _HabitatEditToolbar extends StatelessWidget {
+  const _HabitatEditToolbar({
+    required this.selectedItem,
+    required this.isTurkish,
+    required this.onBringToFront,
+    required this.onSendToBack,
+    required this.onScaleDown,
+    required this.onScaleUp,
+    required this.onRotateLeft,
+    required this.onRotateRight,
+  });
+
+  final HabitatShopItem? selectedItem;
+
+  final bool isTurkish;
+
+  final VoidCallback onBringToFront;
+
+  final VoidCallback onSendToBack;
+
+  final VoidCallback onScaleDown;
+
+  final VoidCallback onScaleUp;
+
+  final VoidCallback onRotateLeft;
+
+  final VoidCallback onRotateRight;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    final item = selectedItem;
+
+    return Material(
+      color: colors.surface.withValues(alpha: 0.94),
+      elevation: 4,
+      borderRadius: BorderRadius.circular(22),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child:
+            item == null
+                ? Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.touch_app_rounded, size: 19),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        isTurkish
+                            ? 'Bir dekor seç veya sürükle'
+                            : 'Select or drag a decoration',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+                : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.tune_rounded, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _habitatItemTitle(item, isTurkish: isTurkish),
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelLarge
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          IconButton.filledTonal(
+                            tooltip: isTurkish ? 'Sola döndür' : 'Rotate left',
+                            onPressed: onRotateLeft,
+                            icon: const Icon(Icons.rotate_left_rounded),
+                          ),
+                          const SizedBox(width: 4),
+                          IconButton.filledTonal(
+                            tooltip: isTurkish ? 'Küçült' : 'Make smaller',
+                            onPressed: onScaleDown,
+                            icon: const Icon(Icons.zoom_out_rounded),
+                          ),
+                          const SizedBox(width: 4),
+                          IconButton.filledTonal(
+                            tooltip: isTurkish ? 'Büyüt' : 'Make larger',
+                            onPressed: onScaleUp,
+                            icon: const Icon(Icons.zoom_in_rounded),
+                          ),
+                          const SizedBox(width: 4),
+                          IconButton.filledTonal(
+                            tooltip: isTurkish ? 'Sağa döndür' : 'Rotate right',
+                            onPressed: onRotateRight,
+                            icon: const Icon(Icons.rotate_right_rounded),
+                          ),
+                          const SizedBox(width: 12),
+                          IconButton(
+                            tooltip:
+                                isTurkish ? 'Arkaya gönder' : 'Send to back',
+                            onPressed: onSendToBack,
+                            icon: const Icon(
+                              Icons.vertical_align_bottom_rounded,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          IconButton(
+                            tooltip: isTurkish ? 'Öne getir' : 'Bring to front',
+                            onPressed: onBringToFront,
+                            icon: const Icon(Icons.vertical_align_top_rounded),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+      ),
+    );
+  }
+}
+
 class _HabitatDecorationSpec {
   const _HabitatDecorationSpec({
     required this.item,
@@ -638,7 +916,9 @@ class _HabitatDecorationSpec {
   });
 
   final HabitatShopItem item;
+
   final String emoji;
+
   final double size;
 }
 
@@ -662,6 +942,8 @@ class _PlacedHabitatDecorations extends StatelessWidget {
     required this.controller,
     required this.isTurkish,
     required this.isEditing,
+    required this.selectedItem,
+    required this.onSelected,
   });
 
   final DailyGoalsController controller;
@@ -670,26 +952,47 @@ class _PlacedHabitatDecorations extends StatelessWidget {
 
   final bool isEditing;
 
+  final HabitatShopItem? selectedItem;
+
+  final ValueChanged<HabitatShopItem> onSelected;
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final roomSize = Size(constraints.maxWidth, constraints.maxHeight);
 
+        final visibleSpecs =
+            _habitatDecorationSpecs
+                .where((spec) => controller.isPlaced(spec.item))
+                .toList()
+              ..sort((left, right) {
+                final layerComparison = controller
+                    .layerFor(left.item)
+                    .compareTo(controller.layerFor(right.item));
+
+                if (layerComparison != 0) {
+                  return layerComparison;
+                }
+
+                return left.item.index.compareTo(right.item.index);
+              });
+
         return Stack(
           children: [
-            for (final spec in _habitatDecorationSpecs)
-              if (controller.isPlaced(spec.item))
-                _DraggableHabitatDecoration(
-                  key: ValueKey('habitat-${spec.item.name}'),
-                  controller: controller,
-                  item: spec.item,
-                  emoji: spec.emoji,
-                  size: spec.size,
-                  roomSize: roomSize,
-                  isTurkish: isTurkish,
-                  isEditing: isEditing,
-                ),
+            for (final spec in visibleSpecs)
+              _DraggableHabitatDecoration(
+                key: ValueKey('habitat-${spec.item.name}'),
+                controller: controller,
+                item: spec.item,
+                emoji: spec.emoji,
+                size: spec.size,
+                roomSize: roomSize,
+                isTurkish: isTurkish,
+                isEditing: isEditing,
+                isSelected: selectedItem == spec.item,
+                onSelected: onSelected,
+              ),
           ],
         );
       },
@@ -707,6 +1010,8 @@ class _DraggableHabitatDecoration extends StatefulWidget {
     required this.roomSize,
     required this.isTurkish,
     required this.isEditing,
+    required this.isSelected,
+    required this.onSelected,
   });
 
   final DailyGoalsController controller;
@@ -722,6 +1027,10 @@ class _DraggableHabitatDecoration extends StatefulWidget {
   final bool isTurkish;
 
   final bool isEditing;
+
+  final bool isSelected;
+
+  final ValueChanged<HabitatShopItem> onSelected;
 
   @override
   State<_DraggableHabitatDecoration> createState() =>
@@ -754,6 +1063,14 @@ class _DraggableHabitatDecorationState
   @override
   void didUpdateWidget(covariant _DraggableHabitatDecoration oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.isEditing && !widget.isEditing && _isDragging) {
+      _isDragging = false;
+
+      _position = widget.controller.positionFor(widget.item);
+
+      return;
+    }
 
     if (!_isDragging) {
       _position = widget.controller.positionFor(widget.item);
@@ -805,11 +1122,19 @@ class _DraggableHabitatDecorationState
         ignoring: !widget.isEditing,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
+
+          onTap: () {
+            widget.onSelected(widget.item);
+          },
+
           onPanStart: (_) {
+            widget.onSelected(widget.item);
+
             setState(() {
               _isDragging = true;
             });
           },
+
           onPanUpdate: (details) {
             final nextX = _position.dx + (details.delta.dx / _usableWidth);
 
@@ -822,6 +1147,7 @@ class _DraggableHabitatDecorationState
               );
             });
           },
+
           onPanCancel: () {
             setState(() {
               _isDragging = false;
@@ -829,6 +1155,7 @@ class _DraggableHabitatDecorationState
               _position = widget.controller.positionFor(widget.item);
             });
           },
+
           onPanEnd: (_) {
             final newPosition = _position;
 
@@ -838,6 +1165,7 @@ class _DraggableHabitatDecorationState
 
             unawaited(_savePosition(newPosition));
           },
+
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             width: _decorationExtent,
@@ -846,36 +1174,53 @@ class _DraggableHabitatDecorationState
             decoration: BoxDecoration(
               color:
                   widget.isEditing
-                      ? colors.surface.withValues(alpha: 0.30)
+                      ? colors.surface.withValues(
+                        alpha: widget.isSelected ? 0.48 : 0.24,
+                      )
                       : Colors.transparent,
               borderRadius: BorderRadius.circular(16),
               border:
                   widget.isEditing
                       ? Border.all(
-                        color: colors.primary.withValues(alpha: 0.65),
-                        width: 2,
+                        color:
+                            widget.isSelected
+                                ? colors.primary
+                                : colors.outline.withValues(alpha: 0.45),
+                        width: widget.isSelected ? 3 : 1.5,
                       )
                       : null,
               boxShadow:
-                  widget.isEditing && _isDragging
+                  widget.isEditing && (widget.isSelected || _isDragging)
                       ? [
                         BoxShadow(
-                          color: colors.shadow.withValues(alpha: 0.20),
-                          blurRadius: 14,
-                          offset: const Offset(0, 5),
+                          color: colors.shadow.withValues(
+                            alpha: _isDragging ? 0.22 : 0.12,
+                          ),
+                          blurRadius: _isDragging ? 16 : 9,
+                          offset: const Offset(0, 4),
                         ),
                       ]
                       : null,
             ),
-            child: AnimatedScale(
-              scale: _isDragging ? 1.15 : 1,
-              duration: const Duration(milliseconds: 120),
-              child: AnimatedOpacity(
-                opacity: _isDragging ? 0.82 : 1,
+            child: AnimatedRotation(
+              turns: widget.controller.rotationFor(widget.item),
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeInOut,
+              child: AnimatedScale(
+                scale:
+                    _isDragging
+                        ? 1.15
+                        : widget.isSelected
+                        ? 1.05
+                        : 1,
                 duration: const Duration(milliseconds: 120),
-                child: Text(
-                  widget.emoji,
-                  style: TextStyle(fontSize: widget.size),
+                child: AnimatedOpacity(
+                  opacity: _isDragging ? 0.82 : 1,
+                  duration: const Duration(milliseconds: 120),
+                  child: Text(
+                    widget.emoji,
+                    style: TextStyle(fontSize: widget.size),
+                  ),
                 ),
               ),
             ),
@@ -1044,8 +1389,10 @@ class _DailyGoalsCard extends StatelessWidget {
               else
                 Text(
                   isTurkish
-                      ? 'Tüm görevleri tamamla ve ${DailyGoalsController.dailyCompletionReward} 🪙 kazan.'
-                      : 'Complete all goals and earn ${DailyGoalsController.dailyCompletionReward} 🪙.',
+                      ? 'Tüm görevleri tamamla ve '
+                          '${DailyGoalsController.dailyCompletionReward} 🪙 kazan.'
+                      : 'Complete all goals and earn '
+                          '${DailyGoalsController.dailyCompletionReward} 🪙.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: colors.onSurfaceVariant,
                   ),
@@ -1798,4 +2145,24 @@ class _QuizResultCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _habitatItemTitle(HabitatShopItem item, {required bool isTurkish}) {
+  return switch (item) {
+    HabitatShopItem.plant => isTurkish ? 'Bitki' : 'Plant',
+
+    HabitatShopItem.cactus => isTurkish ? 'Kaktüs' : 'Cactus',
+
+    HabitatShopItem.teddy => isTurkish ? 'Oyuncak Ayı' : 'Teddy Bear',
+
+    HabitatShopItem.ball => isTurkish ? 'Top' : 'Ball',
+
+    HabitatShopItem.lamp => isTurkish ? 'Lamba' : 'Lamp',
+
+    HabitatShopItem.lantern => isTurkish ? 'Fener' : 'Lantern',
+
+    HabitatShopItem.bookshelf => isTurkish ? 'Kitaplık' : 'Bookshelf',
+
+    HabitatShopItem.chair => isTurkish ? 'Sandalye' : 'Chair',
+  };
 }

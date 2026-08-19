@@ -88,6 +88,12 @@ class DailyGoalsController extends ChangeNotifier {
   final Map<HabitatShopItem, Offset> _itemPositions =
       <HabitatShopItem, Offset>{};
 
+  final Map<HabitatShopItem, int> _itemLayers = <HabitatShopItem, int>{};
+  final Map<HabitatShopItem, double> _itemScales = <HabitatShopItem, double>{};
+
+  final Map<HabitatShopItem, double> _itemRotations =
+      <HabitatShopItem, double>{};
+
   bool _isInitialized = false;
   bool _isDisposed = false;
 
@@ -318,6 +324,18 @@ class DailyGoalsController extends ChangeNotifier {
     };
   }
 
+  int layerFor(HabitatShopItem item) {
+    return _itemLayers[item] ?? item.index;
+  }
+
+  double scaleFor(HabitatShopItem item) {
+    return _itemScales[item] ?? 1.0;
+  }
+
+  double rotationFor(HabitatShopItem item) {
+    return _itemRotations[item] ?? 0.0;
+  }
+
   Future<void> initialize() async {
     if (_isInitialized) {
       return;
@@ -355,6 +373,8 @@ class DailyGoalsController extends ChangeNotifier {
       await _loadOwnedItems();
       await _loadPlacedItems();
       await _loadItemPositions();
+      await _loadItemLayers();
+      await _loadItemTransforms();
 
       _grantCollectionMilestoneRewardsIfNeeded(exposeAsLastReward: false);
 
@@ -482,10 +502,15 @@ class DailyGoalsController extends ChangeNotifier {
     final previousCoins = _coins;
     final previousRewardTier = _collectionRewardTier;
 
+    final previousLayer = _itemLayers[item];
+
+    final newLayer = _nextFrontLayer();
+
     _coins -= price;
 
     _ownedItems.add(item);
     _placedItems.add(item);
+    _itemLayers[item] = newLayer;
 
     _grantCollectionMilestoneRewardsIfNeeded();
 
@@ -510,6 +535,12 @@ class DailyGoalsController extends ChangeNotifier {
 
       _ownedItems.remove(item);
       _placedItems.remove(item);
+
+      if (previousLayer == null) {
+        _itemLayers.remove(item);
+      } else {
+        _itemLayers[item] = previousLayer;
+      }
 
       _safeNotifyListeners();
 
@@ -600,6 +631,224 @@ class DailyGoalsController extends ChangeNotifier {
     }
   }
 
+  Future<bool> bringItemToFront(HabitatShopItem item) async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+
+    if (!isOwned(item)) {
+      return false;
+    }
+
+    final currentLayer = layerFor(item);
+
+    final highestLayer = _highestOwnedLayer();
+
+    if (currentLayer >= highestLayer) {
+      return true;
+    }
+
+    final previousStoredLayer = _itemLayers[item];
+
+    final newLayer = highestLayer + 1;
+
+    _itemLayers[item] = newLayer;
+
+    _safeNotifyListeners();
+
+    try {
+      await _preferences.setInt(_layerKey(item), newLayer);
+
+      return true;
+    } catch (error, stackTrace) {
+      debugPrint(
+        'Failed to bring habitat item to front: '
+        '$error\n$stackTrace',
+      );
+
+      if (previousStoredLayer == null) {
+        _itemLayers.remove(item);
+      } else {
+        _itemLayers[item] = previousStoredLayer;
+      }
+
+      _safeNotifyListeners();
+
+      return false;
+    }
+  }
+
+  Future<bool> sendItemToBack(HabitatShopItem item) async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+
+    if (!isOwned(item)) {
+      return false;
+    }
+
+    final currentLayer = layerFor(item);
+
+    final lowestLayer = _lowestOwnedLayer();
+
+    if (currentLayer <= lowestLayer) {
+      return true;
+    }
+
+    final previousStoredLayer = _itemLayers[item];
+
+    final newLayer = lowestLayer - 1;
+
+    _itemLayers[item] = newLayer;
+
+    _safeNotifyListeners();
+
+    try {
+      await _preferences.setInt(_layerKey(item), newLayer);
+
+      return true;
+    } catch (error, stackTrace) {
+      debugPrint(
+        'Failed to send habitat item to back: '
+        '$error\n$stackTrace',
+      );
+
+      if (previousStoredLayer == null) {
+        _itemLayers.remove(item);
+      } else {
+        _itemLayers[item] = previousStoredLayer;
+      }
+
+      _safeNotifyListeners();
+
+      return false;
+    }
+  }
+
+  Future<bool> updateItemScale(HabitatShopItem item, double scale) async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+
+    if (!isOwned(item)) {
+      return false;
+    }
+
+    final previousScale = scaleFor(item);
+
+    final normalizedScale = scale.clamp(0.60, 1.60).toDouble();
+
+    _itemScales[item] = normalizedScale;
+
+    _safeNotifyListeners();
+
+    try {
+      await _preferences.setDouble(_scaleKey(item), normalizedScale);
+
+      return true;
+    } catch (error, stackTrace) {
+      debugPrint(
+        'Failed to save habitat item scale: '
+        '$error\n$stackTrace',
+      );
+
+      _itemScales[item] = previousScale;
+
+      _safeNotifyListeners();
+
+      return false;
+    }
+  }
+
+  Future<bool> updateItemRotation(HabitatShopItem item, double rotation) async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+
+    if (!isOwned(item)) {
+      return false;
+    }
+
+    final previousRotation = rotationFor(item);
+
+    var normalizedRotation = rotation % 1.0;
+
+    if (normalizedRotation < 0) {
+      normalizedRotation += 1.0;
+    }
+
+    _itemRotations[item] = normalizedRotation;
+
+    _safeNotifyListeners();
+
+    try {
+      await _preferences.setDouble(_rotationKey(item), normalizedRotation);
+
+      return true;
+    } catch (error, stackTrace) {
+      debugPrint(
+        'Failed to save habitat item rotation: '
+        '$error\n$stackTrace',
+      );
+
+      _itemRotations[item] = previousRotation;
+
+      _safeNotifyListeners();
+
+      return false;
+    }
+  }
+
+  Future<bool> resetItemCustomization(HabitatShopItem item) async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+
+    if (!isOwned(item)) {
+      return false;
+    }
+
+    final previousPosition = positionFor(item);
+    final previousScale = scaleFor(item);
+    final previousRotation = rotationFor(item);
+    final previousLayer = layerFor(item);
+
+    final defaultPosition = defaultPositionFor(item);
+
+    _itemPositions[item] = defaultPosition;
+    _itemScales[item] = 1.0;
+    _itemRotations[item] = 0.0;
+    _itemLayers[item] = item.index;
+
+    _safeNotifyListeners();
+
+    try {
+      await Future.wait<void>([
+        _preferences.setDouble(_positionXKey(item), defaultPosition.dx),
+        _preferences.setDouble(_positionYKey(item), defaultPosition.dy),
+        _preferences.setDouble(_scaleKey(item), 1.0),
+        _preferences.setDouble(_rotationKey(item), 0.0),
+        _preferences.setInt(_layerKey(item), item.index),
+      ]);
+
+      return true;
+    } catch (error, stackTrace) {
+      debugPrint(
+        'Failed to reset habitat item customization: '
+        '$error\n$stackTrace',
+      );
+
+      _itemPositions[item] = previousPosition;
+      _itemScales[item] = previousScale;
+      _itemRotations[item] = previousRotation;
+      _itemLayers[item] = previousLayer;
+
+      _safeNotifyListeners();
+
+      return false;
+    }
+  }
+
   Future<void> resetItemPositions() async {
     if (!_isInitialized) {
       await initialize();
@@ -679,6 +928,45 @@ class DailyGoalsController extends ChangeNotifier {
     }
   }
 
+  Future<void> _loadItemLayers() async {
+    _itemLayers.clear();
+
+    for (final item in HabitatShopItem.values) {
+      final layer = await _preferences.getInt(_layerKey(item));
+
+      if (layer == null) {
+        continue;
+      }
+
+      _itemLayers[item] = layer;
+    }
+  }
+
+  Future<void> _loadItemTransforms() async {
+    _itemScales.clear();
+    _itemRotations.clear();
+
+    for (final item in HabitatShopItem.values) {
+      final scale = await _preferences.getDouble(_scaleKey(item));
+
+      final rotation = await _preferences.getDouble(_rotationKey(item));
+
+      if (scale != null) {
+        _itemScales[item] = scale.clamp(0.60, 1.60).toDouble();
+      }
+
+      if (rotation != null) {
+        var normalizedRotation = rotation % 1.0;
+
+        if (normalizedRotation < 0) {
+          normalizedRotation += 1.0;
+        }
+
+        _itemRotations[item] = normalizedRotation;
+      }
+    }
+  }
+
   Future<void> _ensureCurrentDay() async {
     final now = DateTime.now();
     final today = _dateValue(now);
@@ -752,6 +1040,7 @@ class DailyGoalsController extends ChangeNotifier {
     bool exposeAsLastReward = true,
   }) {
     var rewardAmount = 0;
+
     var highestGrantedMilestone = _collectionRewardTier;
 
     for (final entry in collectionMilestoneRewards.entries) {
@@ -790,6 +1079,50 @@ class DailyGoalsController extends ChangeNotifier {
     }
   }
 
+  int _nextFrontLayer() {
+    if (_ownedItems.isEmpty) {
+      return 0;
+    }
+
+    return _highestOwnedLayer() + 1;
+  }
+
+  int _highestOwnedLayer() {
+    if (_ownedItems.isEmpty) {
+      return 0;
+    }
+
+    var highest = layerFor(_ownedItems.first);
+
+    for (final item in _ownedItems) {
+      final layer = layerFor(item);
+
+      if (layer > highest) {
+        highest = layer;
+      }
+    }
+
+    return highest;
+  }
+
+  int _lowestOwnedLayer() {
+    if (_ownedItems.isEmpty) {
+      return 0;
+    }
+
+    var lowest = layerFor(_ownedItems.first);
+
+    for (final item in _ownedItems) {
+      final layer = layerFor(item);
+
+      if (layer < lowest) {
+        lowest = layer;
+      }
+    }
+
+    return lowest;
+  }
+
   Future<void> _persist({required String date}) async {
     final operations = <Future<void>>[
       _preferences.setString(_dateKey, date),
@@ -803,8 +1136,12 @@ class DailyGoalsController extends ChangeNotifier {
 
     for (final item in HabitatShopItem.values) {
       operations.add(_preferences.setBool(_ownedKey(item), isOwned(item)));
-
       operations.add(_preferences.setBool(_placedKey(item), isPlaced(item)));
+      operations.add(_preferences.setInt(_layerKey(item), layerFor(item)));
+      operations.add(_preferences.setDouble(_scaleKey(item), scaleFor(item)));
+      operations.add(
+        _preferences.setDouble(_rotationKey(item), rotationFor(item)),
+      );
     }
 
     final lastCompletedDate = _lastCompletedDate;
@@ -852,6 +1189,18 @@ class DailyGoalsController extends ChangeNotifier {
 
   String _positionYKey(HabitatShopItem item) {
     return 'companion_shop_${item.name}_position_y';
+  }
+
+  String _layerKey(HabitatShopItem item) {
+    return 'companion_shop_${item.name}_layer';
+  }
+
+  String _scaleKey(HabitatShopItem item) {
+    return 'companion_shop_${item.name}_scale';
+  }
+
+  String _rotationKey(HabitatShopItem item) {
+    return 'companion_shop_${item.name}_rotation';
   }
 
   String _dateValue(DateTime date) {
