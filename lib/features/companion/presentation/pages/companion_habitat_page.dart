@@ -8,6 +8,7 @@ import '../../application/daily_goals_controller.dart';
 import '../../domain/entities/companion_state.dart';
 import '../widgets/companion_mascot.dart';
 import '../widgets/habitat_shop_sheet.dart';
+import 'learning_games_page.dart';
 
 enum _HabitatAction { none, feeding, playing, resting }
 
@@ -289,6 +290,36 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
     );
   }
 
+  Future<void> _openLearningGames() async {
+    if (_isEditingHabitat) {
+      return;
+    }
+
+    if (!_dailyGoalsController.isInitialized) {
+      await _dailyGoalsController.initialize();
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    final isTurkish = Localizations.localeOf(context).languageCode == 'tr';
+
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (context) {
+          return LearningGamesPage(
+            quizController: widget.quizController,
+            dailyGoalsController: _dailyGoalsController,
+            companionName: widget.controller.state.name,
+            isTurkish: isTurkish,
+            onQuickQuiz: _openLearningQuiz,
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _openHabitatShop() async {
     if (_isEditingHabitat) {
       return;
@@ -439,6 +470,37 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
       );
   }
 
+  Future<void> _resetSelectedDecoration() async {
+    final item = _selectedHabitatItem;
+
+    if (item == null) {
+      return;
+    }
+
+    final isTurkish = Localizations.localeOf(context).languageCode == 'tr';
+
+    final messenger = ScaffoldMessenger.of(context);
+
+    final saved = await _dailyGoalsController.resetItemCustomization(item);
+
+    if (!mounted) {
+      return;
+    }
+
+    final message =
+        saved
+            ? (isTurkish
+                ? 'Dekor varsayılan haline döndürüldü.'
+                : 'Decoration was reset to default.')
+            : (isTurkish
+                ? 'Dekor sıfırlanamadı.'
+                : 'The decoration could not be reset.');
+
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
   Future<void> _resetHabitatPositions() async {
     final isTurkish = Localizations.localeOf(context).languageCode == 'tr';
 
@@ -553,8 +615,11 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
                         onRotateRight: () {
                           unawaited(_rotateSelectedDecoration(0.125));
                         },
+                        onResetSelected: () {
+                          unawaited(_resetSelectedDecoration());
+                        },
                         onAction: _performAction,
-                        onLearn: _openLearningQuiz,
+                        onLearn: _openLearningGames,
                       ),
                     ),
 
@@ -594,6 +659,7 @@ class _HabitatRoom extends StatelessWidget {
     required this.onScaleUp,
     required this.onRotateLeft,
     required this.onRotateRight,
+    required this.onResetSelected,
     required this.onAction,
     required this.onLearn,
   });
@@ -625,6 +691,8 @@ class _HabitatRoom extends StatelessWidget {
   final VoidCallback onRotateLeft;
 
   final VoidCallback onRotateRight;
+
+  final VoidCallback onResetSelected;
 
   final Future<void> Function(
     _HabitatAction action,
@@ -661,8 +729,8 @@ class _HabitatRoom extends StatelessWidget {
                             await onLearn();
                           }
                           : null,
-                  icon: const Icon(Icons.school_rounded, size: 20),
-                  label: Text(isTurkish ? 'Öğren' : 'Learn'),
+                  icon: const Icon(Icons.sports_esports_rounded, size: 20),
+                  label: Text(isTurkish ? 'Oyunlar' : 'Games'),
                 ),
               ),
 
@@ -717,6 +785,7 @@ class _HabitatRoom extends StatelessWidget {
                   right: 12,
                   bottom: 18,
                   child: _HabitatEditToolbar(
+                    controller: rewardsController,
                     selectedItem: selectedItem,
                     isTurkish: isTurkish,
                     onBringToFront: onBringToFront,
@@ -725,6 +794,7 @@ class _HabitatRoom extends StatelessWidget {
                     onScaleUp: onScaleUp,
                     onRotateLeft: onRotateLeft,
                     onRotateRight: onRotateRight,
+                    onResetSelected: onResetSelected,
                   ),
                 )
               else ...[
@@ -780,6 +850,7 @@ class _HabitatRoom extends StatelessWidget {
 
 class _HabitatEditToolbar extends StatelessWidget {
   const _HabitatEditToolbar({
+    required this.controller,
     required this.selectedItem,
     required this.isTurkish,
     required this.onBringToFront,
@@ -788,7 +859,10 @@ class _HabitatEditToolbar extends StatelessWidget {
     required this.onScaleUp,
     required this.onRotateLeft,
     required this.onRotateRight,
+    required this.onResetSelected,
   });
+
+  final DailyGoalsController controller;
 
   final HabitatShopItem? selectedItem;
 
@@ -806,11 +880,21 @@ class _HabitatEditToolbar extends StatelessWidget {
 
   final VoidCallback onRotateRight;
 
+  final VoidCallback onResetSelected;
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
     final item = selectedItem;
+
+    final scalePercent =
+        item == null ? 100 : (controller.scaleFor(item) * 100).round();
+
+    final rotationDegrees =
+        item == null ? 0 : ((controller.rotationFor(item) * 360).round() % 360);
+
+    final layer = item == null ? 0 : controller.layerFor(item);
 
     return Material(
       color: colors.surface.withValues(alpha: 0.94),
@@ -851,6 +935,36 @@ class _HabitatEditToolbar extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: Theme.of(context).textTheme.labelLarge
                                 ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        Chip(
+                          visualDensity: VisualDensity.compact,
+                          avatar: const Icon(
+                            Icons.zoom_out_map_rounded,
+                            size: 16,
+                          ),
+                          label: Text('$scalePercent%'),
+                        ),
+                        Chip(
+                          visualDensity: VisualDensity.compact,
+                          avatar: const Icon(
+                            Icons.rotate_right_rounded,
+                            size: 16,
+                          ),
+                          label: Text('$rotationDegrees°'),
+                        ),
+                        Chip(
+                          visualDensity: VisualDensity.compact,
+                          avatar: const Icon(Icons.layers_rounded, size: 16),
+                          label: Text(
+                            isTurkish ? 'Katman $layer' : 'Layer $layer',
                           ),
                         ),
                       ],
@@ -897,6 +1011,15 @@ class _HabitatEditToolbar extends StatelessWidget {
                             tooltip: isTurkish ? 'Öne getir' : 'Bring to front',
                             onPressed: onBringToFront,
                             icon: const Icon(Icons.vertical_align_top_rounded),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton.filledTonal(
+                            tooltip:
+                                isTurkish
+                                    ? 'Dekoru sıfırla'
+                                    : 'Reset decoration',
+                            onPressed: onResetSelected,
+                            icon: const Icon(Icons.restart_alt_rounded),
                           ),
                         ],
                       ),
@@ -1323,8 +1446,8 @@ class _DailyGoalsCard extends StatelessWidget {
             else ...[
               _DailyGoalRow(
                 completed: controller.quizCompleted,
-                icon: Icons.school_rounded,
-                text: isTurkish ? '1 soru cevapla' : 'Answer 1 question',
+                icon: Icons.sports_esports_rounded,
+                text: isTurkish ? '1 bilgi oyunu oyna' : 'Play 1 learning game',
               ),
 
               _DailyGoalRow(
