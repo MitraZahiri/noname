@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../quiz/application/quiz_controller.dart';
 import '../../application/companion_controller.dart';
 import '../../application/daily_goals_controller.dart';
+import '../../application/learning_game_progress_controller.dart';
 import '../../domain/entities/companion_state.dart';
 import '../widgets/companion_mascot.dart';
 import '../widgets/habitat_shop_sheet.dart';
@@ -35,6 +36,7 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
   HabitatShopItem? _selectedHabitatItem;
 
   late final DailyGoalsController _dailyGoalsController;
+  late final LearningGameProgressController _learningGameProgressController;
 
   @override
   void initState() {
@@ -43,6 +45,7 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
     WidgetsBinding.instance.addObserver(this);
 
     _dailyGoalsController = DailyGoalsController();
+    _learningGameProgressController = LearningGameProgressController();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await widget.controller.refreshForElapsedTime();
@@ -52,6 +55,12 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
       }
 
       await _dailyGoalsController.initialize();
+
+      if (!mounted) {
+        return;
+      }
+
+      await _learningGameProgressController.initialize();
     });
   }
 
@@ -79,6 +88,7 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
     WidgetsBinding.instance.removeObserver(this);
 
     _dailyGoalsController.dispose();
+    _learningGameProgressController.dispose();
 
     super.dispose();
   }
@@ -140,6 +150,8 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
     bool answered = false;
 
     int knowledgeReward = 0;
+    int gameScore = 0;
+    int combo = 0;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -183,6 +195,39 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
 
                     const SizedBox(height: 20),
 
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        Chip(
+                          avatar: const Icon(Icons.stars_rounded, size: 17),
+                          label: Text(
+                            isTurkish ? 'Skor $gameScore' : 'Score $gameScore',
+                          ),
+                        ),
+                        Chip(
+                          avatar: const Icon(
+                            Icons.local_fire_department_rounded,
+                            size: 17,
+                          ),
+                          label: Text('Combo x$combo'),
+                        ),
+                        Chip(
+                          avatar: const Icon(
+                            Icons.emoji_events_rounded,
+                            size: 17,
+                          ),
+                          label: Text(
+                            isTurkish
+                                ? 'Rekor ${_learningGameProgressController.bestScoreFor(LearningGameType.quickQuiz)}'
+                                : 'Best ${_learningGameProgressController.bestScoreFor(LearningGameType.quickQuiz)}',
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 12),
+
                     Text(
                       question.prompt,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -211,12 +256,21 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
                           final selectedIsCorrect =
                               index == question.correctIndex;
 
+                          final nextCombo = selectedIsCorrect ? combo + 1 : 0;
+
+                          final scoreGain =
+                              selectedIsCorrect
+                                  ? 10 + ((nextCombo - 1) * 2)
+                                  : 0;
+
                           setSheetState(() {
                             selectedIndex = index;
-
                             answered = true;
 
                             knowledgeReward = selectedIsCorrect ? 10 : 2;
+
+                            combo = nextCombo;
+                            gameScore += scoreGain;
                           });
 
                           await widget.quizController.recordAnswer(
@@ -225,6 +279,11 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
 
                           await _dailyGoalsController.complete(
                             DailyGoalType.quiz,
+                          );
+
+                          await _learningGameProgressController.submitScore(
+                            LearningGameType.quickQuiz,
+                            gameScore,
                           );
                         },
                       ),
@@ -311,6 +370,7 @@ class _CompanionHabitatPageState extends State<CompanionHabitatPage>
           return LearningGamesPage(
             quizController: widget.quizController,
             dailyGoalsController: _dailyGoalsController,
+            progressController: _learningGameProgressController,
             companionName: widget.controller.state.name,
             isTurkish: isTurkish,
             onQuickQuiz: _openLearningQuiz,

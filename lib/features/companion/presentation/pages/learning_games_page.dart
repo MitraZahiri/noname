@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 
 import '../../../quiz/application/quiz_controller.dart';
 import '../../application/daily_goals_controller.dart';
+import '../../application/learning_game_progress_controller.dart';
 import 'memory_match_game_page.dart';
 
 class LearningGamesPage extends StatefulWidget {
   const LearningGamesPage({
     required this.quizController,
     required this.dailyGoalsController,
+    required this.progressController,
     required this.companionName,
     required this.isTurkish,
     required this.onQuickQuiz,
@@ -18,6 +20,7 @@ class LearningGamesPage extends StatefulWidget {
 
   final QuizController quizController;
   final DailyGoalsController dailyGoalsController;
+  final LearningGameProgressController progressController;
   final String companionName;
   final bool isTurkish;
   final Future<void> Function() onQuickQuiz;
@@ -57,10 +60,11 @@ class _LearningGamesPageState extends State<LearningGamesPage> {
 
     prepareStatement();
 
-    bool answered = false;
-    bool? selectedAnswer;
-    bool roundCorrect = false;
-    int knowledgeReward = 0;
+    var answered = false;
+    var roundCorrect = false;
+    var knowledgeReward = 0;
+    var gameScore = 0;
+    var combo = 0;
 
     if (!mounted) {
       return;
@@ -80,11 +84,17 @@ class _LearningGamesPageState extends State<LearningGamesPage> {
 
               final isCorrect = answerValue == statementIsTrue;
 
+              final nextCombo = isCorrect ? combo + 1 : 0;
+
+              final scoreGain = isCorrect ? 10 + ((nextCombo - 1) * 2) : 0;
+
               setSheetState(() {
                 answered = true;
-                selectedAnswer = answerValue;
                 roundCorrect = isCorrect;
                 knowledgeReward = isCorrect ? 10 : 2;
+
+                combo = nextCombo;
+                gameScore += scoreGain;
               });
 
               final wrongIndexes = <int>[
@@ -92,18 +102,28 @@ class _LearningGamesPageState extends State<LearningGamesPage> {
                   if (index != question.correctIndex) index,
               ];
 
-              final recordedIndex =
-                  isCorrect
-                      ? question.correctIndex
-                      : wrongIndexes.isNotEmpty
-                      ? wrongIndexes.first
-                      : question.correctIndex;
+              final int recordedIndex;
+
+              if (isCorrect) {
+                recordedIndex = question.correctIndex;
+              } else if (!statementIsTrue) {
+                recordedIndex = statementOptionIndex;
+              } else if (wrongIndexes.isNotEmpty) {
+                recordedIndex = wrongIndexes.first;
+              } else {
+                recordedIndex = question.correctIndex;
+              }
 
               await widget.quizController.recordAnswer(
                 selectedIndex: recordedIndex,
               );
 
               await widget.dailyGoalsController.complete(DailyGoalType.quiz);
+
+              await widget.progressController.submitScore(
+                LearningGameType.trueFalse,
+                gameScore,
+              );
             }
 
             return SafeArea(
@@ -127,14 +147,61 @@ class _LearningGamesPageState extends State<LearningGamesPage> {
                         ),
                       ],
                     ),
+
+                    const SizedBox(height: 12),
+
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        Chip(
+                          avatar: const Icon(Icons.stars_rounded, size: 17),
+                          label: Text(
+                            widget.isTurkish
+                                ? 'Skor $gameScore'
+                                : 'Score $gameScore',
+                          ),
+                        ),
+                        Chip(
+                          avatar: const Icon(
+                            Icons.local_fire_department_rounded,
+                            size: 17,
+                          ),
+                          label: Text('Combo x$combo'),
+                        ),
+                        AnimatedBuilder(
+                          animation: widget.progressController,
+                          builder: (context, _) {
+                            final bestScore = widget.progressController
+                                .bestScoreFor(LearningGameType.trueFalse);
+
+                            return Chip(
+                              avatar: const Icon(
+                                Icons.emoji_events_rounded,
+                                size: 17,
+                              ),
+                              label: Text(
+                                widget.isTurkish
+                                    ? 'Rekor $bestScore'
+                                    : 'Best $bestScore',
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+
                     const SizedBox(height: 20),
+
                     Text(
                       question.prompt,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+
                     const SizedBox(height: 16),
+
                     Container(
                       padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
@@ -149,7 +216,9 @@ class _LearningGamesPageState extends State<LearningGamesPage> {
                         ),
                       ),
                     ),
+
                     const SizedBox(height: 18),
+
                     Row(
                       children: [
                         Expanded(
@@ -164,7 +233,9 @@ class _LearningGamesPageState extends State<LearningGamesPage> {
                             label: Text(widget.isTurkish ? 'Doğru' : 'True'),
                           ),
                         ),
+
                         const SizedBox(width: 12),
+
                         Expanded(
                           child: FilledButton.tonalIcon(
                             onPressed:
@@ -179,8 +250,10 @@ class _LearningGamesPageState extends State<LearningGamesPage> {
                         ),
                       ],
                     ),
+
                     if (answered) ...[
                       const SizedBox(height: 18),
+
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -208,18 +281,39 @@ class _LearningGamesPageState extends State<LearningGamesPage> {
                               style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(fontWeight: FontWeight.bold),
                             ),
+
                             const SizedBox(height: 6),
+
                             Text(
                               widget.isTurkish
                                   ? '+$knowledgeReward Bilgi'
                                   : '+$knowledgeReward Knowledge',
+                              style: Theme.of(context).textTheme.bodyLarge
+                                  ?.copyWith(fontWeight: FontWeight.bold),
                             ),
+
+                            if (roundCorrect) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                combo > 1
+                                    ? (widget.isTurkish
+                                        ? '🔥 $combo doğru seri!'
+                                        : '🔥 $combo answer streak!')
+                                    : (widget.isTurkish
+                                        ? '+10 skor'
+                                        : '+10 score'),
+                              ),
+                            ],
+
                             const SizedBox(height: 10),
+
                             Text(question.explanation),
                           ],
                         ),
                       ),
+
                       const SizedBox(height: 14),
+
                       FilledButton.icon(
                         onPressed: () {
                           setSheetState(() {
@@ -227,7 +321,6 @@ class _LearningGamesPageState extends State<LearningGamesPage> {
                                 .prepareNextQuestion(localeCode: localeCode);
 
                             answered = false;
-                            selectedAnswer = null;
                             roundCorrect = false;
                             knowledgeReward = 0;
 
@@ -239,6 +332,16 @@ class _LearningGamesPageState extends State<LearningGamesPage> {
                           widget.isTurkish ? 'Yeni soru' : 'Next question',
                         ),
                       ),
+
+                      const SizedBox(height: 8),
+
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.of(sheetContext).pop();
+                        },
+                        icon: const Icon(Icons.check_rounded),
+                        label: Text(widget.isTurkish ? 'Bitir' : 'Finish'),
+                      ),
                     ],
                   ],
                 ),
@@ -248,12 +351,6 @@ class _LearningGamesPageState extends State<LearningGamesPage> {
         );
       },
     );
-
-    // Analyzer'ın selectedAnswer değişkenini gereksiz saymaması
-    // ve ileride seçim animasyonunda kullanabilmemiz için tutuluyor.
-    if (selectedAnswer != null) {
-      // Intentional.
-    }
   }
 
   Future<void> _openMemoryGame() async {
@@ -262,6 +359,7 @@ class _LearningGamesPageState extends State<LearningGamesPage> {
         builder: (context) {
           return MemoryMatchGamePage(
             dailyGoalsController: widget.dailyGoalsController,
+            progressController: widget.progressController,
             isTurkish: widget.isTurkish,
           );
         },
@@ -278,8 +376,23 @@ class _LearningGamesPageState extends State<LearningGamesPage> {
         title: Text(widget.isTurkish ? 'Bilgi Oyunları' : 'Learning Games'),
       ),
       body: AnimatedBuilder(
-        animation: widget.dailyGoalsController,
+        animation: Listenable.merge([
+          widget.dailyGoalsController,
+          widget.progressController,
+        ]),
         builder: (context, _) {
+          final quickQuizBest = widget.progressController.bestScoreFor(
+            LearningGameType.quickQuiz,
+          );
+
+          final trueFalseBest = widget.progressController.bestScoreFor(
+            LearningGameType.trueFalse,
+          );
+
+          final memoryBest = widget.progressController.bestScoreFor(
+            LearningGameType.memoryMatch,
+          );
+
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -297,7 +410,9 @@ class _LearningGamesPageState extends State<LearningGamesPage> {
                 child: Column(
                   children: [
                     const Text('🎮', style: TextStyle(fontSize: 44)),
+
                     const SizedBox(height: 8),
+
                     Text(
                       widget.isTurkish
                           ? '${widget.companionName} ile oynayarak öğren!'
@@ -307,7 +422,9 @@ class _LearningGamesPageState extends State<LearningGamesPage> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+
                     const SizedBox(height: 8),
+
                     Text(
                       widget.dailyGoalsController.quizCompleted
                           ? (widget.isTurkish
@@ -318,10 +435,39 @@ class _LearningGamesPageState extends State<LearningGamesPage> {
                               : 'Play at least one learning game today.'),
                       textAlign: TextAlign.center,
                     ),
+
+                    const SizedBox(height: 12),
+
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colors.surface.withValues(alpha: 0.65),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.emoji_events_rounded, size: 18),
+                          const SizedBox(width: 6),
+                          Text(
+                            widget.isTurkish
+                                ? 'Toplam Rekor ${quickQuizBest + trueFalseBest + memoryBest}'
+                                : 'Total Best ${quickQuizBest + trueFalseBest + memoryBest}',
+                            style: Theme.of(context).textTheme.labelLarge
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
+
               const SizedBox(height: 20),
+
               _LearningGameCard(
                 icon: Icons.quiz_rounded,
                 title: widget.isTurkish ? 'Hızlı Quiz' : 'Quick Quiz',
@@ -329,11 +475,15 @@ class _LearningGamesPageState extends State<LearningGamesPage> {
                     widget.isTurkish
                         ? 'Soruyu oku ve doğru cevabı seç.'
                         : 'Read the question and choose the answer.',
+                bestScore: quickQuizBest,
+                isTurkish: widget.isTurkish,
                 onTap: () async {
                   await widget.onQuickQuiz();
                 },
               ),
+
               const SizedBox(height: 12),
+
               _LearningGameCard(
                 icon: Icons.rule_rounded,
                 title: widget.isTurkish ? 'Doğru / Yanlış' : 'True / False',
@@ -341,9 +491,13 @@ class _LearningGamesPageState extends State<LearningGamesPage> {
                     widget.isTurkish
                         ? 'Verilen bilginin doğru olup olmadığını bul.'
                         : 'Decide whether the statement is correct.',
+                bestScore: trueFalseBest,
+                isTurkish: widget.isTurkish,
                 onTap: _openTrueFalseGame,
               ),
+
               const SizedBox(height: 12),
+
               _LearningGameCard(
                 icon: Icons.psychology_rounded,
                 title: widget.isTurkish ? 'Hafıza Eşleştirme' : 'Memory Match',
@@ -351,6 +505,8 @@ class _LearningGamesPageState extends State<LearningGamesPage> {
                     widget.isTurkish
                         ? 'Bilgi kartlarını doğru eşleriyle buluştur.'
                         : 'Match each knowledge card with its pair.',
+                bestScore: memoryBest,
+                isTurkish: widget.isTurkish,
                 onTap: _openMemoryGame,
               ),
             ],
@@ -366,12 +522,16 @@ class _LearningGameCard extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.subtitle,
+    required this.bestScore,
+    required this.isTurkish,
     required this.onTap,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
+  final int bestScore;
+  final bool isTurkish;
   final Future<void> Function() onTap;
 
   @override
@@ -381,8 +541,8 @@ class _LearningGameCard extends StatelessWidget {
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () {
-          onTap();
+        onTap: () async {
+          await onTap();
         },
         child: Padding(
           padding: const EdgeInsets.all(18),
@@ -397,7 +557,9 @@ class _LearningGameCard extends StatelessWidget {
                 ),
                 child: Icon(icon, size: 30, color: colors.onPrimaryContainer),
               ),
+
               const SizedBox(width: 16),
+
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -408,17 +570,45 @@ class _LearningGameCard extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+
                     const SizedBox(height: 4),
+
                     Text(
                       subtitle,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: colors.onSurfaceVariant,
                       ),
                     ),
+
+                    const SizedBox(height: 8),
+
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.emoji_events_rounded,
+                          size: 16,
+                          color: colors.primary,
+                        ),
+
+                        const SizedBox(width: 5),
+
+                        Text(
+                          isTurkish ? 'Rekor $bestScore' : 'Best $bestScore',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.labelMedium?.copyWith(
+                            color: colors.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
+
               const SizedBox(width: 8),
+
               const Icon(Icons.chevron_right_rounded),
             ],
           ),
