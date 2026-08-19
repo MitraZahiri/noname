@@ -799,6 +799,56 @@ class DailyGoalsController extends ChangeNotifier {
     }
   }
 
+  Future<bool> resetItemCustomization(HabitatShopItem item) async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+
+    if (!isOwned(item)) {
+      return false;
+    }
+
+    final previousPosition = positionFor(item);
+    final previousScale = scaleFor(item);
+    final previousRotation = rotationFor(item);
+    final previousLayer = layerFor(item);
+
+    final defaultPosition = defaultPositionFor(item);
+
+    _itemPositions[item] = defaultPosition;
+    _itemScales[item] = 1.0;
+    _itemRotations[item] = 0.0;
+    _itemLayers[item] = item.index;
+
+    _safeNotifyListeners();
+
+    try {
+      await Future.wait<void>([
+        _preferences.setDouble(_positionXKey(item), defaultPosition.dx),
+        _preferences.setDouble(_positionYKey(item), defaultPosition.dy),
+        _preferences.setDouble(_scaleKey(item), 1.0),
+        _preferences.setDouble(_rotationKey(item), 0.0),
+        _preferences.setInt(_layerKey(item), item.index),
+      ]);
+
+      return true;
+    } catch (error, stackTrace) {
+      debugPrint(
+        'Failed to reset habitat item customization: '
+        '$error\n$stackTrace',
+      );
+
+      _itemPositions[item] = previousPosition;
+      _itemScales[item] = previousScale;
+      _itemRotations[item] = previousRotation;
+      _itemLayers[item] = previousLayer;
+
+      _safeNotifyListeners();
+
+      return false;
+    }
+  }
+
   Future<void> resetItemPositions() async {
     if (!_isInitialized) {
       await initialize();
